@@ -40,6 +40,8 @@ class MIRModule:
     event_driven: bool = True
     simulation_steps: int = 32
     functions: list[MIRFunction] = field(default_factory=list)
+    quantization: str = "f32"
+    learning_mode: str = "hybrid"
 
 
 @dataclass
@@ -104,7 +106,9 @@ class IRBuilder:
     def __init__(self):
         self.module = MIRModule()
 
-    def build(self, ast) -> MIRModule:
+    def build(self, ast, **kwargs) -> MIRModule:
+        self.module.quantization = kwargs.get("quantization", "f32")
+        self.module.learning_mode = kwargs.get("learning_mode", "hybrid")
         for decl in ast.declarations:
             self.visit(decl)
         from compiler.ir.sparse_builder import build_sparse_connections

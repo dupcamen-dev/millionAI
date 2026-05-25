@@ -16,6 +16,9 @@ tests = [
     ("tests.test_event_driven", "Event-Driven Tests"),
     ("tests.test_backprop", "Backprop Tests"),
     ("tests.test_llvm_codegen", "LLVM Codegen Tests"),
+    ("tests.test_types", "Type System Tests"),
+    ("tests.test_control_flow", "Control Flow Tests"),
+    ("tests.test_functions", "Function Tests"),
     ("tests.test_end_to_end", "End-to-End Tests"),
 ]
 

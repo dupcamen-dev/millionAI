@@ -124,12 +124,15 @@ def compile_million(
     *,
     search_paths: list[Path] | None = None,
     backend: str = "auto",
+    **kwargs,
 ) -> str:
     """Compile Million source. Returns generated source (C or LLVM IR)."""
     source_path = Path(source_path)
     ast = parse_program(source_path, search_paths=search_paths)
+    quantization = kwargs.get("quantization", "f32")
+    learning_mode = kwargs.get("mode", "hybrid")
     builder = IRBuilder()
-    mir = builder.build(ast)
+    mir = builder.build(ast, quantization=quantization, learning_mode=learning_mode)
     codegen, kind = get_codegen(
         mir, source_dir=source_path.resolve().parent, backend=backend
     )

@@ -48,7 +48,7 @@ class TokenType(Enum):
 KEYWORDS = {
     "neuron", "region", "data", "train", "infer", "connect", "use",
     "archive", "state", "membrane", "dynamics",
-    "adaptive", "hebbian", "stdp", "sparse", "hierarchical",
+    "adaptive", "hebbian", "stdp", "sparse", "hierarchical", "in",
     "self", "input", "output", "on", "as",
     "epochs", "rule", "source", "shape", "plasticity",
     "branching", "sparsity", "potential", "threshold",

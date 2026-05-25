@@ -51,6 +51,8 @@ class Lexer:
         is_float = False
         while self.pos < len(self.source) and (self.peek().isdigit() or self.peek() == "."):
             if self.peek() == ".":
+                if self.peek(1) == ".":
+                    break  # ".." is DOTDOT, not part of float
                 if is_float:
                     break
                 is_float = True

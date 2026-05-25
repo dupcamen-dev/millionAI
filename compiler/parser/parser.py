@@ -176,7 +176,7 @@ class Parser:
     def parse_for(self) -> ForStmt:
         self.expect(TokenType.KEYWORD)
         var = self.expect(TokenType.IDENTIFIER)
-        self.expect(TokenType.KEYWORD) if self.current_token.value == "in" else self.expect(TokenType.KEYWORD)
+        self.expect(TokenType.KEYWORD)  # in
         start = self.parse_expression()
         self.expect(TokenType.DOTDOT)
         end = self.parse_expression()
@@ -200,7 +200,7 @@ class Parser:
         is_let = self.check(TokenType.KEYWORD) and self.current_token.value == "let"
         if is_let:
             self.advance()
-        name = self.expect(TokenType.IDENTIFIER)
+        name = self.expect_identifier_or_keyword()
         type_ref = None
         if self.check(TokenType.COLON):
             self.advance()

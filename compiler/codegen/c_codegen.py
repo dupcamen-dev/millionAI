@@ -34,6 +34,7 @@ class CCodeGen:
         self._emit_types()
         self._emit_neuron_structs()
         self._emit_archive_ops()
+        self._emit_tensor_ops()
         CBackpropEmitter(self.emit).emit_block()
         self._emit_learning_rules()
         self._emit_neuron_processors()
@@ -118,6 +119,29 @@ class CCodeGen:
         self.emit("out[i] = tanhf(sum / (float)group);")
         self.indent -= 1
         self.emit("}")
+        self.indent -= 1
+        self.emit("}")
+        self.emit()
+
+    def _emit_tensor_ops(self):
+        self.emit("/* ========= Tensor Operations ========= */")
+        self.emit("void tensor_add(float* a, float* b, float* out, int n) {")
+        self.indent += 1
+        self.emit("for (int i = 0; i < n; i++) out[i] = a[i] + b[i];")
+        self.indent -= 1
+        self.emit("}")
+        self.emit()
+        self.emit("void tensor_mul(float* a, float* b, float* out, int n) {")
+        self.indent += 1
+        self.emit("for (int i = 0; i < n; i++) out[i] = a[i] * b[i];")
+        self.indent -= 1
+        self.emit("}")
+        self.emit()
+        self.emit("void tensor_dot(float* a, float* b, int n) {")
+        self.indent += 1
+        self.emit("float sum = 0.0f;")
+        self.emit("for (int i = 0; i < n; i++) sum += a[i] * b[i];")
+        self.emit("return sum;")
         self.indent -= 1
         self.emit("}")
         self.emit()
@@ -256,6 +280,25 @@ class CCodeGen:
         self.emit("}")
         self.emit()
 
+    def _emit_online_learning(self):
+        for neuron in self.module.neurons:
+            if neuron.learning_mode == "online":
+                self.emit(f"void online_step_{neuron.name}(Neuron_{neuron.name}* n,")
+                self.emit(f"    float* input, float lr, float stdp_lr) {{")
+                self.indent += 1
+                ns = neuron.nucleus_size
+                self.emit(f"// Online learning: infer + train on each step")
+                self.emit(f"float fwd_l1[{ns * neuron.archive_levels}];")
+                self.emit(f"float fwd_out[{ns}];")
+                self.emit(f"archive_unfold(n->nucleus, {ns}, fwd_l1, {ns * neuron.archive_levels}, 1);")
+                self.emit(f"archive_compress(fwd_l1, {ns * neuron.archive_levels}, fwd_out, {ns});")
+                self.emit(f"apply_stdp(n->nucleus, {ns}, input, {ns}, fwd_out[0], stdp_lr);")
+                self.emit(f"// Hebbian update")
+                self.emit(f"apply_hebbian(n->nucleus, {ns}, input, {ns}, fwd_out[0], lr);")
+                self.indent -= 1
+                self.emit("}")
+                self.emit()
+
     def _emit_neuron_processors(self):
         self.emit("/* ========= Neuron Processors ========= */")
         for neuron in self.module.neurons:
@@ -361,6 +404,12 @@ class CCodeGen:
                 self.emit(
                     f"bptt_backward_{train.region}(input, {ns}, {lr}f, {stdp_lr}f);"
                 )
+            elif mode == "online":
+                self.emit(f"for (int i = 0; i < {count}; i++) {{")
+                self.indent += 1
+                self.emit(f"online_step_{nt}(&{train.region}_neurons[i], input, {lr}f, {stdp_lr}f);")
+                self.indent -= 1
+                self.emit("}")
             else:
                 self.emit(f"for (int i = 0; i < {count}; i++) {{")
                 self.indent += 1

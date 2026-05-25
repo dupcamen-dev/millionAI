@@ -15,18 +15,36 @@ def main(argv: list[str] | None = None) -> int:
         description="Million Language Compiler — brain-inspired neural computation",
     )
     parser.add_argument("input", nargs="?", help="Input .million file")
-    parser.add_argument("output", nargs="?", help="Output .c file (default: input basename)")
+    parser.add_argument("output", nargs="?", help="Output file (default: input basename)")
     parser.add_argument("-V", "--version", action="version", version=f"Million {__version__}")
+    parser.add_argument("-q", "--quiet", action="store_true", help="Suppress status messages")
     parser.add_argument(
-        "-q", "--quiet", action="store_true", help="Suppress status messages"
+        "--repl", action="store_true", help="Launch interactive REPL"
     )
     parser.add_argument(
         "--backend",
         choices=["auto", "c", "llvm"],
         default="auto",
-        help="Code backend: llvm (default if llvmlite installed) or c",
+        help="Code backend: auto (default), c, or llvm",
+    )
+    parser.add_argument(
+        "--quantization",
+        choices=["f32", "int8", "binary"],
+        default="f32",
+        help="Quantization mode (default: f32)",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["hybrid", "online"],
+        default="hybrid",
+        help="Learning mode: hybrid or online (default: hybrid)",
     )
     args = parser.parse_args(argv)
+
+    if args.repl:
+        from compiler.repl import run_repl
+        run_repl(backend=args.backend, quantization=args.quantization, mode=args.mode)
+        return 0
 
     if not args.input:
         parser.print_help()
@@ -43,6 +61,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Million Compiler v{__version__}")
         print(f"  Source: {source}")
         print(f"  Output: {output}")
+        print(f"  Backend: {args.backend}")
+        print(f"  Quantization: {args.quantization}")
+        print(f"  Mode: {args.mode}")
         print()
 
     try:
@@ -51,6 +72,8 @@ def main(argv: list[str] | None = None) -> int:
             output,
             search_paths=[PROJECT_ROOT, PROJECT_ROOT / "stdlib"],
             backend=args.backend,
+            quantization=args.quantization,
+            mode=args.mode,
         )
     except (SyntaxError, FileNotFoundError) as e:
         print(f"Error: {e}", file=sys.stderr)
