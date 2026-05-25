@@ -38,6 +38,7 @@ class CCodeGen:
         CBackpropEmitter(self.emit, self._set_indent).emit_block()
         self._emit_learning_rules()
         self._emit_neuron_processors()
+        self._emit_online_learning()
         ev = CEventEmitter(self.emit, self._set_indent, self)
         ev.emit_globals()
         ev.emit_queue_helpers()
@@ -282,22 +283,21 @@ class CCodeGen:
 
     def _emit_online_learning(self):
         for neuron in self.module.neurons:
-            if neuron.learning_mode == "online":
-                self.emit(f"void online_step_{neuron.name}(Neuron_{neuron.name}* n,")
-                self.emit(f"    float* input, float lr, float stdp_lr) {{")
-                self.indent += 1
-                ns = neuron.nucleus_size
-                self.emit(f"// Online learning: infer + train on each step")
-                self.emit(f"float fwd_l1[{ns * neuron.archive_levels}];")
-                self.emit(f"float fwd_out[{ns}];")
-                self.emit(f"archive_unfold(n->nucleus, {ns}, fwd_l1, {ns * neuron.archive_levels}, 1);")
-                self.emit(f"archive_compress(fwd_l1, {ns * neuron.archive_levels}, fwd_out, {ns});")
-                self.emit(f"apply_stdp(n->nucleus, {ns}, input, {ns}, fwd_out[0], stdp_lr);")
-                self.emit(f"// Hebbian update")
-                self.emit(f"apply_hebbian(n->nucleus, {ns}, input, {ns}, fwd_out[0], lr);")
-                self.indent -= 1
-                self.emit("}")
-                self.emit()
+            self.emit(f"void online_step_{neuron.name}(Neuron_{neuron.name}* n,")
+            self.emit(f"    float* input, float lr, float stdp_lr) {{")
+            self.indent += 1
+            ns = neuron.nucleus_size
+            self.emit(f"// Online learning: infer + train on each step")
+            self.emit(f"float fwd_l1[{ns * neuron.archive_levels}];")
+            self.emit(f"float fwd_out[{ns}];")
+            self.emit(f"archive_unfold(n->nucleus, {ns}, fwd_l1, {ns * neuron.archive_levels}, 1);")
+            self.emit(f"archive_compress(fwd_l1, {ns * neuron.archive_levels}, fwd_out, {ns});")
+            self.emit(f"apply_stdp(n->nucleus, {ns}, input, {ns}, fwd_out[0], stdp_lr);")
+            self.emit(f"// Hebbian update")
+            self.emit(f"apply_hebbian(n->nucleus, {ns}, input, {ns}, fwd_out[0], lr);")
+            self.indent -= 1
+            self.emit("}")
+            self.emit()
 
     def _emit_neuron_processors(self):
         self.emit("/* ========= Neuron Processors ========= */")

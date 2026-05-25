@@ -1,0 +1,48 @@
+// Tiny Char Language Model - Million v1.0
+// Uses pre-trained weights from numpy training
+
+neuron LanguageNeuron {
+    nucleus: archive{state[16], 4}
+    membrane {
+        potential: 0.0
+        threshold: adaptive
+        refractory: 0
+    }
+    dynamics {
+        // Embed current input character
+        let x: tensor[16] = embed_lookup(input_char)
+        
+        // Archive unfold/compress simulates RNN hidden state
+        h1 = unfold(nucleus, 1)
+        h2 = unfold(h1, 2)
+        features = compress(h2)
+        
+        // Mix embedding with hidden state
+        h_mixed = features + x
+        output = compress(h_mixed)
+    }
+}
+
+region LanguageCortex {
+    neurons: LanguageNeuron[64]
+    connect self -> self: sparse(0.05) {
+        plasticity: STDP
+        branching: 8
+    }
+}
+
+data LMWeights {
+    source: "lm_weights.json"
+    shape: [128, 128]
+}
+
+train LanguageCortex on LMWeights {
+    epochs: 10
+    mode: online
+    learning_rate: 0.0001
+    stdp_lr: 0.001
+}
+
+infer LanguageCortex on input_char {
+    output -> next_char
+}
