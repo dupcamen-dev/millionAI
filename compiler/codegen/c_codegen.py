@@ -76,6 +76,7 @@ class CCodeGen:
             self.emit(f"struct Neuron_{neuron.name} {{")
             self.indent += 1
             self.emit(f"float nucleus[{neuron.nucleus_size}];")
+            self.emit("float bias;")
             self.emit("Membrane mem;")
             self.emit("float output;")
             self.indent -= 1
@@ -87,9 +88,12 @@ class CCodeGen:
             self.emit(f"    extern float qwen_init_{neuron.name}[];")
             self.emit(f"    memcpy(n->nucleus, qwen_init_{neuron.name}, sizeof(n->nucleus));")
             self.emit("#else")
+            ns = neuron.nucleus_size
+            self.emit(f"    float xavier_scale = sqrtf(6.0f / (float)({ns} + {ns}));")
             self.emit("    for (int ri = 0; ri < sizeof(n->nucleus) / sizeof(float); ri++)")
-            self.emit("        n->nucleus[ri] = ((float)rand() / RAND_MAX) * 0.2f - 0.1f;")
+            self.emit("        n->nucleus[ri] = ((float)rand() / RAND_MAX - 0.5f) * 2.0f * xavier_scale;")
             self.emit("#endif")
+            self.emit("n->bias = 1.0f;")
             self.emit(f"n->mem.potential = {neuron.membrane_potential}f;")
             if neuron.membrane_threshold == "adaptive":
                 self.emit("n->mem.threshold = 1.0f;")
@@ -130,7 +134,7 @@ class CCodeGen:
         self.emit("int start = i * group;")
         self.emit("for (int j = 0; j < group && (start + j) < in_size; j++)")
         self.emit("    sum += in[start + j];")
-        self.emit("out[i] = tanhf(sum / (float)group);")
+        self.emit("out[i] = sum / (float)group;")
         self.indent -= 1
         self.emit("}")
         self.indent -= 1
@@ -237,7 +241,7 @@ class CCodeGen:
         self.emit("delta /= (float)input_size;")
         self.indent -= 1
         self.emit("}")
-        self.emit("n->mem.potential += delta;")
+        self.emit("n->mem.potential += delta + n->bias;")
         self.emit("if (n->mem.potential >= n->mem.threshold) {")
         self.indent += 1
         self.emit("n->output = n->mem.potential;")
@@ -252,7 +256,7 @@ class CCodeGen:
         self.emit("} else {")
         self.indent += 1
         self.emit("n->output = 0.0f;")
-        self.emit("n->mem.potential *= 0.95f;")
+        self.emit("n->mem.potential *= 0.99f;")
         self.indent -= 1
         self.emit("}")
 

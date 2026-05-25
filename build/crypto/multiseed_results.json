@@ -1,0 +1,122 @@
+{
+  "config": {
+    "lr": 0.01,
+    "tau": 24,
+    "thresh": 0.3,
+    "sl": 0.05,
+    "tp": 0.12,
+    "fee": 0.002
+  },
+  "results": [
+    {
+      "test_trades": 6.0,
+      "winrate": 50.0,
+      "test_pnl": 7.5906,
+      "final_eq": 2.13,
+      "max_dd": 12.53,
+      "buy_hold": 6.36,
+      "train_pnl": -25.3068,
+      "train_trades": 2135.0,
+      "train_wr": 58.6
+    },
+    {
+      "test_trades": 6.0,
+      "winrate": 50.0,
+      "test_pnl": 7.5906,
+      "final_eq": 2.13,
+      "max_dd": 12.53,
+      "buy_hold": 6.36,
+      "train_pnl": -29.8077,
+      "train_trades": 940.0,
+      "train_wr": 41.6
+    },
+    {
+      "test_trades": 8.0,
+      "winrate": 62.5,
+      "test_pnl": 7.4878,
+      "final_eq": 2.15,
+      "max_dd": 12.53,
+      "buy_hold": 6.36,
+      "train_pnl": -39.0426,
+      "train_trades": 1548.0,
+      "train_wr": 52.5
+    },
+    {
+      "test_trades": 6.0,
+      "winrate": 50.0,
+      "test_pnl": 7.5906,
+      "final_eq": 2.13,
+      "max_dd": 12.53,
+      "buy_hold": 6.36,
+      "train_pnl": -33.8918,
+      "train_trades": 1504.0,
+      "train_wr": 38.8
+    },
+    {
+      "test_trades": 7.0,
+      "winrate": 42.9,
+      "test_pnl": 8.1229,
+      "final_eq": 2.06,
+      "max_dd": 12.53,
+      "buy_hold": 6.36,
+      "train_pnl": -35.1014,
+      "train_trades": 672.0,
+      "train_wr": 54.6
+    },
+    {
+      "test_trades": 8.0,
+      "winrate": 62.5,
+      "test_pnl": 7.5479,
+      "final_eq": 3.73,
+      "max_dd": 12.53,
+      "buy_hold": 6.36,
+      "train_pnl": -33.8511,
+      "train_trades": 2454.0,
+      "train_wr": 59.5
+    },
+    {
+      "test_trades": 8.0,
+      "winrate": 62.5,
+      "test_pnl": 7.4878,
+      "final_eq": 2.15,
+      "max_dd": 12.53,
+      "buy_hold": 6.36,
+      "train_pnl": -27.2405,
+      "train_trades": 954.0,
+      "train_wr": 53.9
+    },
+    {
+      "test_trades": 9.0,
+      "winrate": 55.6,
+      "test_pnl": 7.6887,
+      "final_eq": 3.72,
+      "max_dd": 12.53,
+      "buy_hold": 6.36,
+      "train_pnl": -32.7058,
+      "train_trades": 392.0,
+      "train_wr": 51.3
+    },
+    {
+      "test_trades": 8.0,
+      "winrate": 62.5,
+      "test_pnl": 7.5479,
+      "final_eq": 3.73,
+      "max_dd": 12.53,
+      "buy_hold": 6.36,
+      "train_pnl": -32.2194,
+      "train_trades": 2190.0,
+      "train_wr": 53.1
+    },
+    {
+      "test_trades": 8.0,
+      "winrate": 62.5,
+      "test_pnl": 7.4878,
+      "final_eq": 2.15,
+      "max_dd": 12.53,
+      "buy_hold": 6.36,
+      "train_pnl": -35.0866,
+      "train_trades": 2316.0,
+      "train_wr": 48.9
+    }
+  ]
+}
