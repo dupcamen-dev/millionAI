@@ -1,0 +1,63 @@
+// Million Standard Library - Base Neuron Types
+
+// Minimal spiking neuron
+neuron LIF {
+    nucleus: archive{state[8], 2}
+
+    membrane {
+        potential: 0.0
+        threshold: 1.0
+        refractory: 2
+    }
+
+    dynamics {
+        spike = potential >= threshold
+        output = spike
+    }
+}
+
+// Sensory neuron for input encoding
+neuron Sensory {
+    nucleus: state[32]
+
+    membrane {
+        potential: 0.0
+        threshold: adaptive
+        refractory: 1
+    }
+
+    dynamics {
+        output = encode(input, nucleus)
+    }
+}
+
+// Motor neuron for output decoding
+neuron Motor {
+    nucleus: state[32]
+
+    membrane {
+        potential: 0.0
+        threshold: 0.5
+        refractory: 1
+    }
+
+    dynamics {
+        output = decode(nucleus)
+    }
+}
+
+// Associative memory neuron
+neuron Memory {
+    nucleus: archive{state[64], 4}
+
+    membrane {
+        potential: 0.0
+        threshold: adaptive
+        refractory: 0
+    }
+
+    dynamics {
+        pattern = recall(nucleus, input)
+        output = pattern
+    }
+}

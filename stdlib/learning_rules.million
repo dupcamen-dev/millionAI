@@ -1,0 +1,34 @@
+// Million Standard Library - Learning Rules
+
+// Hebbian: "cells that fire together, wire together"
+rule hebbian {
+    pre: input
+    post: output
+    update: weight += lr * pre * post
+    normalize: true
+}
+
+// STDP: Spike-Timing-Dependent Plasticity
+rule stdp {
+    pre: input
+    post: output
+    tau_pre: 20ms
+    tau_post: 20ms
+    update: weight += lr * (exp(-dt/tau_pre) - exp(-dt/tau_post))
+}
+
+// Oja's rule: Hebbian with weight decay
+rule oja {
+    pre: input
+    post: output
+    update: weight += lr * (pre * post - alpha * post^2 * weight)
+    alpha: 0.1
+}
+
+// Reinforcement learning rule
+rule reinforce {
+    reward: signal
+    update: weight += lr * reward * eligibility
+    eligibility: trace
+    decay: 0.95
+}

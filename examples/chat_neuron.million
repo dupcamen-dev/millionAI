@@ -1,0 +1,44 @@
+// Million Language - Chat Neuron Example
+// A single universal neuron with recursive archive state
+// that can learn and respond to conversation
+
+neuron DNA {
+    nucleus: archive{state[16], 3}
+
+    membrane {
+        potential: 0.0
+        threshold: adaptive
+        refractory: 1
+    }
+
+    dynamics {
+        level1 = unfold(nucleus, 1)
+        level2 = unfold(level1, 2)
+        output = compress(level2)
+    }
+}
+
+region Cortex {
+    neurons: DNA[100]
+
+    connect self -> self: hierarchical {
+        branching: 4
+        sparsity: 0.01
+        plasticity: STDP
+    }
+}
+
+data ChatData {
+    source: "conversations.txt"
+    shape: [16, 100]
+}
+
+train Cortex on ChatData {
+    epochs: 100
+    rule: hebbian
+    learning_rate: 0.01
+}
+
+infer Cortex on input {
+    output -> result
+}
