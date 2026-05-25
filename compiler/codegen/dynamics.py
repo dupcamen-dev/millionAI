@@ -43,7 +43,7 @@ class DynamicsCodegen:
         else:
             out_size = f"({in_size} * {self.archive_levels})"
         self.allocs.append(
-            f"float* {out_ptr} = (float*)malloc(({out_size}) * sizeof(float));"
+            f"float {out_ptr}[{out_size}];"
         )
         self.lines.append(
             f"archive_unfold({in_ptr}, {in_size}, {out_ptr}, {out_size}, {level});"
@@ -113,11 +113,7 @@ class DynamicsCodegen:
         return "n->nucleus", self.nucleus_size
 
     def _malloc_vars(self) -> list[str]:
-        return [
-            a.split("*")[1].split("=")[0].strip()
-            for a in self.allocs
-            if "malloc" in a
-        ]
+        return []
 
     def generate(self) -> tuple[list[str], list[str], str | None, list[str]]:
         """

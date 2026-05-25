@@ -83,9 +83,18 @@ class CCodeGen:
             self.emit()
             self.emit(f"void init_{neuron.name}(Neuron_{neuron.name}* n) {{")
             self.indent += 1
-            self.emit("memset(n->nucleus, 0, sizeof(n->nucleus));")
+            self.emit("#ifdef USE_QWEN_WEIGHTS")
+            self.emit(f"    extern float qwen_init_{neuron.name}[];")
+            self.emit(f"    memcpy(n->nucleus, qwen_init_{neuron.name}, sizeof(n->nucleus));")
+            self.emit("#else")
+            self.emit("    for (int ri = 0; ri < sizeof(n->nucleus) / sizeof(float); ri++)")
+            self.emit("        n->nucleus[ri] = ((float)rand() / RAND_MAX) * 0.2f - 0.1f;")
+            self.emit("#endif")
             self.emit(f"n->mem.potential = {neuron.membrane_potential}f;")
-            self.emit("n->mem.threshold = 1.0f;")
+            if neuron.membrane_threshold == "adaptive":
+                self.emit("n->mem.threshold = 1.0f;")
+            else:
+                self.emit(f"n->mem.threshold = {neuron.membrane_threshold}f;")
             self.emit(f"n->mem.refractory = {neuron.refractory_period}f;")
             self.emit("n->mem.refr_counter = 0;")
             self.emit("n->output = 0.0f;")
@@ -94,13 +103,17 @@ class CCodeGen:
             self.emit()
 
     def _emit_archive_ops(self):
+        self.emit("#ifndef ARCHIVE_PROJ_FN")
+        self.emit("#define ARCHIVE_PROJ_FN(i, j, level) sinf((float)((i) * (j) + (level)))")
+        self.emit("#endif")
+        self.emit()
         self.emit("void archive_unfold(float* in, int in_size, float* out, int out_size, int level) {")
         self.indent += 1
         self.emit("for (int i = 0; i < out_size; i++) {")
         self.indent += 1
         self.emit("float sum = 0.0f;")
         self.emit("for (int j = 0; j < in_size; j++)")
-        self.emit("    sum += in[j] * sinf((float)(i * j + level));")
+        self.emit("    sum += in[j] * ARCHIVE_PROJ_FN(i, j, level);")
         self.emit("out[i] = tanhf(sum / (float)in_size);")
         self.indent -= 1
         self.emit("}")
@@ -199,7 +212,7 @@ class CCodeGen:
                 self.emit(f"memcpy({state_var}, {compressed}, sizeof({state_var}));")
             elif compressed and compressed.startswith("dyn_tmp"):
                 self.emit(f"float {state_var}[{ns}];")
-                l2 = ns * neuron.archive_levels * ns
+                l2 = ns * neuron.archive_levels
                 self.emit(f"archive_compress({compressed}, {l2}, {state_var}, {ns});")
             else:
                 self.emit(f"float {state_var}[{ns}];")
@@ -460,7 +473,7 @@ class CCodeGen:
 
     def _emit_main(self, ev: CEventEmitter):
         ns = self.module.neurons[0].nucleus_size if self.module.neurons else 16
-        self.emit("int main(void) {")
+        self.emit("int generated_main(void) {")
         self.indent += 1
         self.emit("srand((unsigned int)time(NULL));")
         self.emit(f'printf("Million Runtime v{__version__} (event-driven)\\n");')
@@ -484,10 +497,11 @@ class CCodeGen:
             self.indent -= 1
             self.emit("}")
             for infer in self.module.infer_stmts:
-                self.emit(f"float result = infer_{infer.region}(input, {ns});")
+                var = f"result_{infer.region.lower()}"
+                self.emit(f"float {var} = infer_{infer.region}(input, {ns});")
                 self.emit('printf("Million: %c (confidence: %.3f)\\n",')
                 self.indent += 2
-                self.emit("(char)((int)((result + 1.0f) * 64.0f) % 95 + 32), result);")
+                self.emit(f"(char)((int)(({var} + 1.0f) * 64.0f) % 95 + 32), {var});")
                 self.indent -= 2
             self.indent -= 1
             self.emit("}")

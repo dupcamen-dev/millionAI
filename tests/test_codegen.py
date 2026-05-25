@@ -28,7 +28,7 @@ def test_minimal_example():
     c = compile_million(PROJECT_ROOT / "examples" / "minimal.million", backend="c")
     assert "process_Echo" in c
     assert "infer_Pool" in c
-    assert "int main" in c
+    assert "generated_main" in c or "int main" in c
     print("  [ok] test_minimal_example")
 
 

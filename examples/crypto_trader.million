@@ -1,0 +1,35 @@
+// Crypto SNN Trader — Million v0.3
+// All neurons in one region for simplicity.
+// Input: 8-channel OHLCV encoding (encoded by C runner)
+
+neuron TradingNeuron {
+    nucleus: archive{state[64], 4}
+    membrane {
+        potential: 0.0
+        threshold: 0.5
+        refractory: 0
+    }
+    dynamics {
+        features = compress(unfold(nucleus, 1))
+        output = compress(features)
+    }
+}
+
+neuron ActionNeuron {
+    nucleus: state[3]
+    membrane {
+        potential: 0.0
+        threshold: 0.5
+        refractory: 0
+    }
+    dynamics {
+        output = nucleus
+    }
+}
+
+region TradingCortex {
+    neurons: TradingNeuron[16]
+    connect self -> self: sparse(0.15) {
+        plasticity: STDP
+    }
+}

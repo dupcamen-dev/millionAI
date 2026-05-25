@@ -26,7 +26,7 @@ class CBackpropEmitter:
         self.emit("float sum = 0.0f;")
         self.emit("for (int j = 0; j < in_size; j++) {")
         if self._set_indent: self._set_indent(3)
-        self.emit("sum += in[j] * sinf((float)(i * j + level));")
+        self.emit("sum += in[j] * ARCHIVE_PROJ_FN(i, j, level);")
         if self._set_indent: self._set_indent(2)
         self.emit("}")
         self.emit("float act = tanhf(sum / (float)in_size);")
@@ -34,7 +34,7 @@ class CBackpropEmitter:
         self.emit("for (int j = 0; j < in_size; j++) {")
         if self._set_indent: self._set_indent(3)
         self.emit(
-            "grad_in[j] += grad_out[i] * dtanh * sinf((float)(i * j + level)) /"
+            "grad_in[j] += grad_out[i] * dtanh * ARCHIVE_PROJ_FN(i, j, level) /"
             " (float)in_size;"
         )
         if self._set_indent: self._set_indent(2)

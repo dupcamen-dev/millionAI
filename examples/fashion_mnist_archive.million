@@ -1,9 +1,12 @@
 neuron VisionDNA {
-    nucleus: archive{state[784], 1}
+    nucleus: archive{state[784], 4}
     membrane {
         potential: 0.0
         threshold: 1.0
         refractory: 1
+    }
+    dynamics {
+        output = compress(unfold(nucleus, 1))
     }
 }
 

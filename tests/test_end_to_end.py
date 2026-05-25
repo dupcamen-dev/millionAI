@@ -33,7 +33,7 @@ def test_full_compilation():
     c_code = codegen.generate()
     assert len(c_code) > 1000
     assert "#include <stdlib.h>" in c_code
-    assert "int main" in c_code
+    assert "generated_main" in c_code or "int main" in c_code
     assert "int process_DNA" in c_code
     assert "infer_Cortex" in c_code
     assert "load_ChatData" in c_code

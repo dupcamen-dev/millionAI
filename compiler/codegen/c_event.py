@@ -211,7 +211,7 @@ class CEventEmitter:
         self.emit("event_head = 0;")
         self.emit("event_tail = 0;")
         self.emit(f"inject_input({name}_event_q, &event_head, &event_tail, input,")
-        self.emit(f"    input_size < {input_size} ? input_size : {input_size}, 0);")
+        self.emit(f"    input_size < {count} ? input_size : {count}, 0);")
         self.emit(f"run_region_{name}({steps});")
         self.emit(f"for (int i = 0; i < {count}; i++)")
         self.emit(f"    output[i] = {name}_neurons[i].output;")
