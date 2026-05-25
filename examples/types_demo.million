@@ -1,0 +1,38 @@
+// Million v1.0 - type system demo
+
+fn add(x: f32, y: f32) -> f32 {
+    return x + y
+}
+
+fn is_positive(x: f32) -> bool {
+    if x > 0.0 {
+        return true
+    } else {
+        return false
+    }
+}
+
+let answer: int = 42
+let name: string = "million"
+
+neuron Test {
+    nucleus: state[16]
+    membrane {
+        potential: 0.0
+        threshold: 1.0
+        refractory: 0
+    }
+    dynamics {
+        let x: f32 = 1.0
+        let y: f32 = add(x, 2.0)
+        output = compress(unfold(nucleus, 1))
+    }
+}
+
+region R {
+    neurons: Test[2]
+}
+
+infer R on input {
+    output -> result
+}

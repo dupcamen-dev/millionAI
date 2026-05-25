@@ -1,0 +1,23 @@
+// Minimal Million program without external data
+
+neuron Echo {
+    nucleus: state[8]
+
+    membrane {
+        potential: 0.0
+        threshold: 0.5
+        refractory: 1
+    }
+
+    dynamics {
+        output = nucleus
+    }
+}
+
+region Pool {
+    neurons: Echo[4]
+}
+
+infer Pool on input {
+    output -> result
+}

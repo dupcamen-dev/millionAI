@@ -18,7 +18,7 @@ def parse_source(source: str):
 def test_empty():
     prog = parse_source("")
     assert len(prog.declarations) == 0
-    print("  вњ“ test_empty")
+    print("  [ok] test_empty")
 
 
 def test_neuron_minimal():
@@ -42,7 +42,7 @@ neuron DNA {
     assert n.name == "DNA"
     assert n.membrane
     assert n.dynamics
-    print("  вњ“ test_neuron_minimal")
+    print("  [ok] test_neuron_minimal")
 
 
 def test_region():
@@ -62,7 +62,7 @@ region VisualCortex {
     assert r.count == 1000
     assert len(r.connections) == 1
     assert r.connections[0].plasticity == "STDP"
-    print("  вњ“ test_region")
+    print("  [ok] test_region")
 
 
 def test_data():
@@ -79,7 +79,7 @@ data TrainingData {
     assert d.name == "TrainingData"
     assert d.source == "dataset.bin"
     assert d.shape == [28, 28]
-    print("  вњ“ test_data")
+    print("  [ok] test_data")
 
 
 def test_train_infer():
@@ -99,7 +99,7 @@ infer Cortex on input {
     assert isinstance(prog.declarations[1], InferStmt)
     assert prog.declarations[0].region == "Cortex"
     assert prog.declarations[1].output == "result"
-    print("  вњ“ test_train_infer")
+    print("  [ok] test_train_infer")
 
 
 def test_full_program():
@@ -112,7 +112,7 @@ def test_full_program():
     assert "DataDef" in names
     assert "TrainStmt" in names
     assert "InferStmt" in names
-    print("  вњ“ test_full_program")
+    print("  [ok] test_full_program")
 
 
 if __name__ == "__main__":

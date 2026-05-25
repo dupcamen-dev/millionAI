@@ -1,64 +1,66 @@
 #!/usr/bin/env python3
-"""
-Million Compiler v0.1
-Language for brain-inspired neural computation.
-"""
+"""Million Compiler CLI."""
 
+import argparse
 import sys
-import os
+from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from compiler.lexer import Lexer
-from compiler.parser import Parser
-from compiler.ir.million_ir import IRBuilder
-from compiler.codegen import CCodeGen
+from compiler import __version__
+from compiler.compile import compile_million, PROJECT_ROOT
 
 
-def compile_million(source_path: str, output_path: str = None) -> str:
-    with open(source_path, "r", encoding="utf-8") as f:
-        source = f.read()
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="million",
+        description="Million Language Compiler — brain-inspired neural computation",
+    )
+    parser.add_argument("input", nargs="?", help="Input .million file")
+    parser.add_argument("output", nargs="?", help="Output .c file (default: input basename)")
+    parser.add_argument("-V", "--version", action="version", version=f"Million {__version__}")
+    parser.add_argument(
+        "-q", "--quiet", action="store_true", help="Suppress status messages"
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["auto", "c", "llvm"],
+        default="auto",
+        help="Code backend: llvm (default if llvmlite installed) or c",
+    )
+    args = parser.parse_args(argv)
 
-    # Lex
-    lexer = Lexer(source)
-    tokens = lexer.tokenize()
+    if not args.input:
+        parser.print_help()
+        return 1
 
-    # Parse
-    parser = Parser(tokens)
-    ast = parser.parse()
+    source = Path(args.input)
+    if not source.is_file():
+        print(f"Error: file not found: {source}", file=sys.stderr)
+        return 1
 
-    # Build IR
-    builder = IRBuilder()
-    mir = builder.build(ast)
+    output = Path(args.output) if args.output else source.with_suffix(".c")
 
-    # Codegen
-    codegen = CCodeGen(mir)
-    c_code = codegen.generate()
+    if not args.quiet:
+        print(f"Million Compiler v{__version__}")
+        print(f"  Source: {source}")
+        print(f"  Output: {output}")
+        print()
 
-    if output_path:
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(c_code)
+    try:
+        c_code = compile_million(
+            source,
+            output,
+            search_paths=[PROJECT_ROOT, PROJECT_ROOT / "stdlib"],
+            backend=args.backend,
+        )
+    except (SyntaxError, FileNotFoundError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
 
-    return c_code
-
-
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: python -m compiler.main <input.million> [output.c]")
-        sys.exit(1)
-
-    source_path = sys.argv[1]
-    output_path = sys.argv[2] if len(sys.argv) > 2 else source_path.rsplit(".", 1)[0] + ".c"
-
-    print(f"Million Compiler v0.1")
-    print(f"  Source: {source_path}")
-    print(f"  Output: {output_path}")
-    print()
-
-    c_code = compile_million(source_path, output_path)
-    print(f"Generated {len(c_code)} bytes of C code.")
-    print("Done.")
+    if not args.quiet:
+        print(f"Generated {len(c_code)} bytes of C code.")
+        print("Done.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

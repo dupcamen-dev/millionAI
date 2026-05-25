@@ -124,6 +124,13 @@ class Lexer:
             multi = {
                 "->": TokenType.ARROW,
                 "=>": TokenType.FAT_ARROW,
+                ">=": TokenType.GE,
+                "<=": TokenType.LE,
+                "==": TokenType.EQEQ,
+                "!=": TokenType.NE,
+                "..": TokenType.DOTDOT,
+                "&&": TokenType.ANDAND,
+                "||": TokenType.PIPEPIPE,
             }
             two = self.peek(1)
             if two and ch + two in multi:
@@ -143,6 +150,7 @@ class Lexer:
                 "/": TokenType.SLASH, "%": TokenType.PERCENT,
                 "|": TokenType.PIPE, "&": TokenType.AMPERSAND,
                 "<": TokenType.LESS, ">": TokenType.GREATER,
+                "!": TokenType.BANG,
             }
             if ch in single:
                 self.advance()

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "million-lang"
+version = "0.3.0"
+description = "Million — DSL for brain-inspired neural computation"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+keywords = ["compiler", "dsl", "neural", "brain-inspired"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.scripts]
+million = "compiler.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["compiler*"]
+
+[project.optional-dependencies]
+llvm = ["llvmlite>=0.41"]
+dev = ["llvmlite>=0.41"]

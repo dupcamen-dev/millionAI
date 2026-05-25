@@ -61,6 +61,52 @@ class Assignment(Node):
 
 
 @dataclass
+class VarDecl(Node):
+    name: str = ""
+    type: TypeRef = None
+    value: Node = None
+
+
+@dataclass
+class Block(Node):
+    statements: list[Node] = field(default_factory=list)
+
+
+@dataclass
+class IfStmt(Node):
+    condition: Node = None
+    then_block: Block = None
+    else_block: Block = None
+
+
+@dataclass
+class ForStmt(Node):
+    var: str = ""
+    start: Node = None
+    end: Node = None
+    body: Block = None
+
+
+@dataclass
+class WhileStmt(Node):
+    condition: Node = None
+    body: Block = None
+
+
+@dataclass
+class ReturnStmt(Node):
+    value: Node = None
+
+
+@dataclass
+class FuncDef(Node):
+    name: str = ""
+    params: list[VarDecl] = field(default_factory=list)
+    return_type: TypeRef = None
+    body: Block = None
+
+
+@dataclass
 class MembraneDef(Node):
     potential: Node = None
     threshold: Node = None
@@ -123,6 +169,11 @@ class InferStmt(Node):
     region: str = ""
     input: str = ""
     output: str = ""
+
+
+@dataclass
+class UseStmt(Node):
+    path: str = ""
 
 
 @dataclass

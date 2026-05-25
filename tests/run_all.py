@@ -11,6 +11,11 @@ import sys
 tests = [
     ("tests.test_lexer", "Lexer Tests"),
     ("tests.test_parser", "Parser Tests"),
+    ("tests.test_import", "Import Tests"),
+    ("tests.test_codegen", "Codegen Tests"),
+    ("tests.test_event_driven", "Event-Driven Tests"),
+    ("tests.test_backprop", "Backprop Tests"),
+    ("tests.test_llvm_codegen", "LLVM Codegen Tests"),
     ("tests.test_end_to_end", "End-to-End Tests"),
 ]
 

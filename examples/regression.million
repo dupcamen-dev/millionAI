@@ -1,0 +1,32 @@
+// Simple regression example
+
+neuron Regressor {
+    nucleus: state[8]
+    membrane {
+        potential: 0.0
+        threshold: adaptive
+        refractory: 1
+    }
+    dynamics {
+        output = compress(unfold(nucleus, 1))
+    }
+}
+
+region Predictor {
+    neurons: Regressor[4]
+}
+
+data TrainingData {
+    source: "regression_data.txt"
+    shape: [4, 1]
+}
+
+train Predictor on TrainingData {
+    epochs: 20
+    rule: hebbian
+    learning_rate: 0.01
+}
+
+infer Predictor on x {
+    output -> y_hat
+}

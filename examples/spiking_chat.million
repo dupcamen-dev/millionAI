@@ -1,8 +1,6 @@
-// Million Language - Chat Neuron Example
-// A single universal neuron with recursive archive state
-// that can learn and respond to conversation
+// Event-driven spiking chat — Million v0.3
 
-neuron DNA {
+neuron SpikeDNA {
     nucleus: archive{state[16], 3}
 
     membrane {
@@ -18,27 +16,29 @@ neuron DNA {
     }
 }
 
-region Cortex {
-    neurons: DNA[100]
+region SpikingCortex {
+    neurons: SpikeDNA[32]
 
     connect self -> self: hierarchical {
         branching: 4
-        sparsity: 0.01
+        sparsity: 0.05
         plasticity: STDP
     }
 }
 
-data ChatData {
+data SpikeChatData {
     source: "conversations.txt"
-    shape: [16, 100]
+    shape: [16, 32]
 }
 
-train Cortex on ChatData {
-    epochs: 10
+train SpikingCortex on SpikeChatData {
+    epochs: 5
     rule: hebbian
+    mode: hybrid
     learning_rate: 0.01
+    stdp_lr: 0.005
 }
 
-infer Cortex on input {
-    output -> result
+infer SpikingCortex on input {
+    output -> reply
 }

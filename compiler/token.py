@@ -35,10 +35,18 @@ class TokenType(Enum):
     AMPERSAND = auto()
     LESS = auto()
     GREATER = auto()
+    LE = auto()
+    GE = auto()
+    EQEQ = auto()
+    NE = auto()
+    BANG = auto()
+    DOTDOT = auto()
+    ANDAND = auto()
+    PIPEPIPE = auto()
 
 
 KEYWORDS = {
-    "neuron", "region", "data", "train", "infer", "connect",
+    "neuron", "region", "data", "train", "infer", "connect", "use",
     "archive", "state", "membrane", "dynamics",
     "adaptive", "hebbian", "stdp", "sparse", "hierarchical",
     "self", "input", "output", "on", "as",
@@ -47,6 +55,9 @@ KEYWORDS = {
     "refractory", "learning_rate", "batch_size",
     "true", "false", "and", "or", "not",
     "if", "else", "for", "while", "return",
+    "let", "fn", "int", "bool", "string", "tensor", "list",
+    "mode", "online", "quantization",
+    "int8", "binary",
 }
 
 

@@ -1,9 +1,32 @@
 from dataclasses import dataclass, field
-from typing import Any
 
 
 class MIRType:
     pass
+
+
+@dataclass
+class MIRSpikeEvent:
+    neuron_id: int
+    time: int
+    strength: float
+    source_id: int = -1
+
+
+@dataclass
+class MIRSparseConnection:
+    pre: int
+    post: int
+    weight: float
+    delay: int = 1
+
+
+@dataclass
+class MIRFunction:
+    name: str = ""
+    params: list[tuple[str, str]] = field(default_factory=list)
+    return_type: str = "void"
+    body: list = field(default_factory=list)
 
 
 @dataclass
@@ -14,6 +37,9 @@ class MIRModule:
     datasets: list = field(default_factory=list)
     train_stmts: list = field(default_factory=list)
     infer_stmts: list = field(default_factory=list)
+    event_driven: bool = True
+    simulation_steps: int = 32
+    functions: list[MIRFunction] = field(default_factory=list)
 
 
 @dataclass
@@ -25,6 +51,9 @@ class MIRNeuron:
     membrane_threshold: str = "adaptive"
     refractory_period: float = 1.0
     dynamics: list = field(default_factory=list)
+    learning_mode: str = "hybrid"
+    loss_function: str = "mse"
+    quantization: str = "f32"
 
 
 @dataclass
@@ -33,6 +62,7 @@ class MIRRegion:
     neuron_type: str = ""
     neuron_count: int = 0
     connections: list = field(default_factory=list)
+    sparse_connections: list[MIRSparseConnection] = field(default_factory=list)
 
 
 @dataclass
@@ -59,6 +89,8 @@ class MIRTrain:
     epochs: int = 1
     learning_rate: float = 0.01
     rule: str = "hebbian"
+    mode: str = "hybrid"
+    stdp_lr: float = 0.01
 
 
 @dataclass
@@ -75,6 +107,13 @@ class IRBuilder:
     def build(self, ast) -> MIRModule:
         for decl in ast.declarations:
             self.visit(decl)
+        from compiler.ir.sparse_builder import build_sparse_connections
+
+        for region in self.module.regions:
+            if not region.sparse_connections:
+                region.sparse_connections = build_sparse_connections(
+                    region.neuron_count, region.connections
+                )
         return self.module
 
     def visit(self, node):
@@ -85,9 +124,23 @@ class IRBuilder:
     def generic_visit(self, node):
         pass
 
+    def visit_FuncDef(self, node):
+        params = [(p.name, p.type.name if p.type else "f32") for p in node.params]
+        rt = node.return_type.name if node.return_type else "void"
+        func = MIRFunction(
+            name=node.name,
+            params=params,
+            return_type=rt,
+            body=node.body.statements if node.body else [],
+        )
+        self.module.functions.append(func)
+
     def visit_NeuronDef(self, node):
         nuc_size = 16
         arch_levels = 3
+        learning_mode = "hybrid"
+        loss_function = "mse"
+        quantization = "f32"
         if node.nucleus:
             if hasattr(node.nucleus, "size"):
                 nuc_size = node.nucleus.size
@@ -101,8 +154,12 @@ class IRBuilder:
             if node.membrane.potential and hasattr(node.membrane.potential, "value"):
                 mem_pot = float(node.membrane.potential.value)
             if node.membrane.threshold:
-                if hasattr(node.membrane.threshold, "name") and node.membrane.threshold.name == "adaptive":
+                if hasattr(node.membrane.threshold, "name") and (
+                    node.membrane.threshold.name == "adaptive"
+                ):
                     mem_thr = "adaptive"
+                elif hasattr(node.membrane.threshold, "value"):
+                    mem_thr = str(node.membrane.threshold.value)
             if node.membrane.refractory and hasattr(node.membrane.refractory, "value"):
                 mem_ref = float(str(node.membrane.refractory.value).replace("ms", ""))
 
@@ -118,6 +175,9 @@ class IRBuilder:
             membrane_threshold=mem_thr,
             refractory_period=mem_ref,
             dynamics=dynamics,
+            learning_mode=learning_mode,
+            loss_function=loss_function,
+            quantization=quantization,
         )
         self.module.neurons.append(neuron)
 
@@ -130,11 +190,16 @@ class IRBuilder:
             branching = 4
             if c.branching and hasattr(c.branching, "value"):
                 branching = int(c.branching.value)
-            conns.append(MIRConnection(
-                source=c.source, target=c.target,
-                pattern=c.pattern, sparsity=sparsity,
-                plasticity=c.plasticity, branching=branching,
-            ))
+            conns.append(
+                MIRConnection(
+                    source=c.source,
+                    target=c.target,
+                    pattern=c.pattern,
+                    sparsity=sparsity,
+                    plasticity=c.plasticity,
+                    branching=branching,
+                )
+            )
         region = MIRRegion(
             name=node.name,
             neuron_type=node.neuron_type,
@@ -155,19 +220,29 @@ class IRBuilder:
         epochs = 1
         lr = 0.01
         rule = "hebbian"
+        mode = "hybrid"
+        stdp_lr = 0.01
         for p in node.params:
             if p.key == "epochs":
                 epochs = int(p.value.value) if hasattr(p.value, "value") else 1
-            elif p.key == "learning_rate" or p.key == "rate":
+            elif p.key in ("learning_rate", "rate"):
                 lr = float(p.value.value) if hasattr(p.value, "value") else 0.01
             elif p.key == "rule":
                 rule = p.value.name if hasattr(p.value, "name") else str(p.value)
+            elif p.key in ("mode", "learning_mode"):
+                mode = p.value.name if hasattr(p.value, "name") else str(p.value)
+            elif p.key == "stdp_lr":
+                stdp_lr = float(p.value.value) if hasattr(p.value, "value") else 0.01
+            elif p.key == "quantization":
+                mode = p.value.name if hasattr(p.value, "name") else str(p.value)
         train = MIRTrain(
             region=node.region,
             dataset=node.dataset,
             epochs=epochs,
             learning_rate=lr,
             rule=rule,
+            mode=mode,
+            stdp_lr=stdp_lr,
         )
         self.module.train_stmts.append(train)
 

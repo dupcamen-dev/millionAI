@@ -16,7 +16,7 @@ def test_basic_tokens():
     assert tokens[2].type == TokenType.LBRACE
     assert tokens[3].type == TokenType.RBRACE
     assert tokens[4].type == TokenType.EOF
-    print("  вњ“ test_basic_tokens")
+    print("  [ok] test_basic_tokens")
 
 
 def test_numbers():
@@ -25,7 +25,7 @@ def test_numbers():
     tokens = lexer.tokenize()
     assert tokens[0].type == TokenType.NUMBER and tokens[0].value == 42
     assert tokens[1].type == TokenType.FLOAT and tokens[1].value == 3.14
-    print("  вњ“ test_numbers")
+    print("  [ok] test_numbers")
 
 
 def test_string():
@@ -33,7 +33,7 @@ def test_string():
     lexer = Lexer(source)
     tokens = lexer.tokenize()
     assert tokens[0].type == TokenType.STRING and tokens[0].value == "hello world"
-    print("  вњ“ test_string")
+    print("  [ok] test_string")
 
 
 def test_comment():
@@ -42,7 +42,7 @@ def test_comment():
     tokens = lexer.tokenize()
     assert tokens[0].type == TokenType.NEWLINE
     assert tokens[1].type == TokenType.KEYWORD and tokens[1].value == "neuron"
-    print("  вњ“ test_comment")
+    print("  [ok] test_comment")
 
 
 def test_operators():
@@ -59,7 +59,7 @@ def test_operators():
         TokenType.COLON, TokenType.COMMA, TokenType.DOT,
     ]
     assert types == expected, f"Expected {expected}, got {types}"
-    print("  вњ“ test_operators")
+    print("  [ok] test_operators")
 
 
 def test_keywords():
@@ -70,7 +70,7 @@ def test_keywords():
         if t.type == TokenType.EOF:
             break
         assert t.type == TokenType.KEYWORD, f"Expected KEYWORD, got {t}"
-    print("  вњ“ test_keywords")
+    print("  [ok] test_keywords")
 
 
 if __name__ == "__main__":

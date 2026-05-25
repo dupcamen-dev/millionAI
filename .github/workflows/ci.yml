@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install optional LLVM support
+        run: pip install llvmlite
+        continue-on-error: true
+      - name: Run tests
+        run: python tests/run_all.py
+      - name: Compile example to C
+        run: python -m compiler.main examples/chat_neuron.million /tmp/chat_neuron.c -q
+      - name: Compile C with gcc
+        run: gcc /tmp/chat_neuron.c -o /tmp/chat_neuron -lm -Wall -Wextra
+      - name: Smoke test (non-interactive)
+        run: echo "q" | /tmp/chat_neuron | head -5

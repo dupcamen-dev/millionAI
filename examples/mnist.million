@@ -1,0 +1,40 @@
+// MNIST classifier - Million language
+// Classifies handwritten digits 0-9
+
+neuron VisionDNA {
+    nucleus: archive{state[128], 4}
+    membrane {
+        potential: 0.0
+        threshold: adaptive
+        refractory: 2
+    }
+    dynamics {
+        l1 = unfold(nucleus, 1)
+        l2 = unfold(l1, 2)
+        features = compress(l2)
+        output = compress(features)
+    }
+}
+
+region VisualCortex {
+    neurons: VisionDNA[64]
+    connect self -> self: sparse(0.02) {
+        plasticity: STDP
+    }
+}
+
+data MNIST {
+    source: "mnist.bin"
+    shape: [784, 10]
+}
+
+train VisualCortex on MNIST {
+    epochs: 50
+    mode: hybrid
+    learning_rate: 0.001
+    stdp_lr: 0.005
+}
+
+infer VisualCortex on image {
+    output -> digit
+}

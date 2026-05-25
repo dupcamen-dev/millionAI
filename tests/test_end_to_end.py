@@ -3,6 +3,7 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from compiler.compile import compile_million
 from compiler.lexer import Lexer
 from compiler.parser import Parser
 from compiler.ir.million_ir import IRBuilder
@@ -32,11 +33,15 @@ def test_full_compilation():
     c_code = codegen.generate()
     assert len(c_code) > 1000
     assert "#include <stdlib.h>" in c_code
-    assert "int main()" in c_code
-    assert "process_DNA" in c_code
+    assert "int main" in c_code
+    assert "int process_DNA" in c_code
     assert "infer_Cortex" in c_code
+    assert "load_ChatData" in c_code
+    assert "train_Cortex" in c_code
+    assert "run_region_Cortex" in c_code
+    assert "SpikeEvent" in c_code
 
-    print("  вњ“ test_full_compilation")
+    print("  [ok] test_full_compilation")
 
 
 def test_archive_code():
@@ -71,13 +76,21 @@ infer TestRegion on x {
 
     assert "archive_unfold" in c_code
     assert "archive_compress" in c_code
-    assert "void process_Test" in c_code
+    assert "int process_Test" in c_code
     assert "infer_TestRegion" in c_code
-    print("  вњ“ test_archive_code")
+    print("  [ok] test_archive_code")
+
+
+def test_compile_api():
+    c = compile_million("examples/chat_neuron.million", backend="c")
+    assert len(c) > 2000
+    assert "Million Runtime" in c
+    print("  [ok] test_compile_api")
 
 
 if __name__ == "__main__":
     print("Running end-to-end tests...")
     test_full_compilation()
     test_archive_code()
+    test_compile_api()
     print("All end-to-end tests passed!")

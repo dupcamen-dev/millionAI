@@ -6,3 +6,5 @@
 __pycache__/
 .DS_Store
 *.log
+examples/_import_probe.million
+examples/with_import.million
