@@ -138,9 +138,13 @@ def main():
         if compile_c(output_c, binary, cc):
             print(f"      Built {binary.name} with {cc}")
 
-            # Step 3: Run native
+            # Step 3: Run native (pass empty input to skip interactive chat)
             print("\n[3/3] Running native binary ...")
-            subprocess.run([str(binary)], check=True)
+            p = subprocess.Popen([str(binary)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            out, err = p.communicate(input="\n", timeout=5)
+            print(out)
+            if err:
+                print(f"      stderr: {err}")
             print("      Done!")
         else:
             print("      Falling back to Python simulation")

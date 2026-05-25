@@ -4,44 +4,45 @@
 class CBackpropEmitter:
     """Generate backprop helpers for archive unfold/compress."""
 
-    def __init__(self, emit_fn):
+    def __init__(self, emit_fn, set_indent_fn=None):
         self.emit = emit_fn
+        self._set_indent = set_indent_fn
         self.indent = 0
 
     def emit_block(self):
         self.emit("/* ========= Archive Gradients ========= */")
         self._emit_unfold_grad()
         self._emit_compress_grad()
-        self._emit_hybrid_training()
 
     def _emit_unfold_grad(self):
         self.emit(
             "void archive_unfold_grad(float* in, int in_size, float* out, int out_size,"
         )
         self.emit("    int level, float* grad_out, float* grad_in) {")
-        self.indent = 1
+        if self._set_indent: self._set_indent(1)
         self.emit("for (int j = 0; j < in_size; j++) grad_in[j] = 0.0f;")
         self.emit("for (int i = 0; i < out_size; i++) {")
-        self.indent += 1
+        if self._set_indent: self._set_indent(2)
         self.emit("float sum = 0.0f;")
         self.emit("for (int j = 0; j < in_size; j++) {")
-        self.indent += 1
+        if self._set_indent: self._set_indent(3)
         self.emit("sum += in[j] * sinf((float)(i * j + level));")
-        self.indent -= 1
+        if self._set_indent: self._set_indent(2)
         self.emit("}")
         self.emit("float act = tanhf(sum / (float)in_size);")
         self.emit("float dtanh = 1.0f - act * act;")
         self.emit("for (int j = 0; j < in_size; j++) {")
-        self.indent += 1
+        if self._set_indent: self._set_indent(3)
         self.emit(
             "grad_in[j] += grad_out[i] * dtanh * sinf((float)(i * j + level)) /"
             " (float)in_size;"
         )
-        self.indent -= 1
+        if self._set_indent: self._set_indent(2)
         self.emit("}")
-        self.indent -= 1
+        if self._set_indent: self._set_indent(1)
         self.emit("}")
-        self.indent = 0
+        if self._set_indent: self._set_indent(0)
+        self.emit("}")
         self.emit()
 
     def _emit_compress_grad(self):
@@ -49,32 +50,31 @@ class CBackpropEmitter:
             "void archive_compress_grad(float* in, int in_size, float* out, int out_size,"
         )
         self.emit("    float* grad_out, float* grad_in) {")
-        self.indent = 1
+        if self._set_indent: self._set_indent(1)
         self.emit("int group = in_size / out_size;")
         self.emit("if (group < 1) group = 1;")
         self.emit("for (int j = 0; j < in_size; j++) grad_in[j] = 0.0f;")
         self.emit("for (int i = 0; i < out_size; i++) {")
-        self.indent += 1
+        if self._set_indent: self._set_indent(2)
         self.emit("float sum = 0.0f;")
         self.emit("int start = i * group;")
         self.emit("for (int j = 0; j < group && (start + j) < in_size; j++) {")
-        self.indent += 1
+        if self._set_indent: self._set_indent(3)
         self.emit("sum += in[start + j];")
-        self.indent -= 1
+        if self._set_indent: self._set_indent(2)
         self.emit("}")
         self.emit("float act = tanhf(sum / (float)group);")
         self.emit("float dtanh = 1.0f - act * act;")
         self.emit("for (int j = 0; j < group && (start + j) < in_size; j++) {")
-        self.indent += 1
+        if self._set_indent: self._set_indent(3)
         self.emit("grad_in[start + j] += grad_out[i] * dtanh / (float)group;")
-        self.indent -= 1
+        if self._set_indent: self._set_indent(2)
         self.emit("}")
-        self.indent -= 1
+        if self._set_indent: self._set_indent(1)
         self.emit("}")
-        self.indent = 0
+        if self._set_indent: self._set_indent(0)
+        self.emit("}")
         self.emit()
-
-    def _emit_hybrid_training(self):
         self.emit("/* Hybrid gradient + STDP training step (template via macros) */")
         self.emit(
             "#define TRAIN_STEP_HYBRID(NT, NS, LR, STDP_LR) do { \\"

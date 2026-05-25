@@ -35,7 +35,7 @@ class CCodeGen:
         self._emit_neuron_structs()
         self._emit_archive_ops()
         self._emit_tensor_ops()
-        CBackpropEmitter(self.emit).emit_block()
+        CBackpropEmitter(self.emit, self._set_indent).emit_block()
         self._emit_learning_rules()
         self._emit_neuron_processors()
         ev = CEventEmitter(self.emit, self._set_indent, self)
@@ -137,7 +137,7 @@ class CCodeGen:
         self.indent -= 1
         self.emit("}")
         self.emit()
-        self.emit("void tensor_dot(float* a, float* b, int n) {")
+        self.emit("float tensor_dot(float* a, float* b, int n) {")
         self.indent += 1
         self.emit("float sum = 0.0f;")
         self.emit("for (int i = 0; i < n; i++) sum += a[i] * b[i];")
