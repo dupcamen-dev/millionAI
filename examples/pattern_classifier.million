@@ -1,0 +1,41 @@
+// Pattern Classifier - Million v1.0
+// 4 spiking neurons learn to recognize 4 text patterns
+
+neuron PatternNeuron {
+    nucleus: archive{state[8], 4}
+    membrane {
+        potential: 0.0
+        threshold: 0.8
+        refractory: 3
+    }
+    dynamics {
+        h1 = unfold(nucleus, 1)
+        h2 = unfold(h1, 2)
+        features = compress(h2)
+        output = compress(features)
+    }
+}
+
+region Cortex {
+    neurons: PatternNeuron[4]
+    connect self -> self: sparse(0.1) {
+        plasticity: STDP
+        branching: 2
+    }
+}
+
+data Patterns {
+    source: "patterns.txt"
+    shape: [8, 4]
+}
+
+train Cortex on Patterns {
+    epochs: 30
+    mode: hybrid
+    learning_rate: 0.001
+    stdp_lr: 0.01
+}
+
+infer Cortex on input {
+    output -> prediction
+}

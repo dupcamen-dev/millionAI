@@ -146,10 +146,13 @@ class IRBuilder:
         loss_function = "mse"
         quantization = "f32"
         if node.nucleus:
-            if hasattr(node.nucleus, "size"):
-                nuc_size = node.nucleus.size
             if hasattr(node.nucleus, "levels"):
                 arch_levels = node.nucleus.levels
+                if hasattr(node.nucleus, "inner_type") and node.nucleus.inner_type:
+                    if hasattr(node.nucleus.inner_type, "size"):
+                        nuc_size = node.nucleus.inner_type.size
+            elif hasattr(node.nucleus, "size"):
+                nuc_size = node.nucleus.size
 
         mem_pot = 0.0
         mem_thr = "adaptive"
