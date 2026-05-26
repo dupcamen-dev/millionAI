@@ -2,8 +2,11 @@ import math
 import sys
 import time
 
+import numpy as np
+
 from exchange.binance_rest import BinanceFuturesAPI, BinanceAPIError, INSUFFICIENT_BALANCE, INSUFFICIENT_MARGIN, INVALID_API_KEY, RATE_LIMIT
 from exchange.screener import AssetScreener
+from trader.backtest import quick_backtest
 from .base import BaseTrader
 
 ERR_MESSAGES = {
@@ -83,8 +86,8 @@ class RealTrader(BaseTrader):
             self._log("ERROR", f"Init error: {e}")
             raise
 
-    def _auto_select_symbol(self, top_n=5):
-        """Run screener, pick best symbol, set leverage."""
+    def _auto_select_symbol(self, top_n=5, backtest_top=3):
+        """Run screener → backtest top candidates → pick best by risk_score."""
         try:
             candidates = self.screener.scan(top_n=top_n)
             self.last_screener_candidates = candidates or []
@@ -92,20 +95,61 @@ class RealTrader(BaseTrader):
                 self._log("ERROR", "Screener found no candidates, using default symbol")
                 self.binance.set_leverage(self.symbol, self.leverage)
                 return
+
             for c in candidates:
                 self._log("SYS", f"Screener: {c['symbol']} @ ${c['price']:.4f} vol={c['volatility']:.2f}% score={c['score']:.4f}")
-            best = candidates[0]
-            self.symbol = best["symbol"]
-            self.leverage = select_leverage(best["volatility"])
-            self.binance.set_leverage(self.symbol, self.leverage)
-            self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (vol={best['volatility']:.2f}%)")
-            print(f"[Screener] Selected {self.symbol} @ ${best['price']:.4f} vol={best['volatility']:.2f}% -> {self.leverage}x")
-            # Re-load LOT_SIZE for new symbol
+
+            best_asset = None
+            best_risk = -999
+            best_result = None
+            backtest_list = candidates[:backtest_top]
+
+            for a in backtest_list:
+                self._log("SYS", f"Backtesting {a['symbol']} with 1000 candles...")
+                raw = self.binance.get_klines(a["symbol"], "5m", 1000)
+                if not raw or len(raw) < 200:
+                    self._log("WARN", f"Insufficient data for {a['symbol']}, skipping")
+                    continue
+                data = np.zeros((len(raw), 5), dtype=np.float32)
+                for i, k in enumerate(raw):
+                    data[i] = [float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])]
+                r = quick_backtest(data)
+                if r["trades"] < 3:
+                    self._log("WARN", f"Backtest {a['symbol']}: only {r['trades']} trades, skipping")
+                    continue
+                self._log("SYS", f"  -> {r['trades']}t WR:{r['winrate']*100:.1f}% avg:{r['avg_pnl']*100:.2f}% risk:{r['risk_score']:.2f}")
+                if r["risk_score"] > best_risk:
+                    best_risk = r["risk_score"]
+                    best_asset = a
+                    best_result = r
+
+            if best_asset is None:
+                self._log("WARN", "No backtest passed, using top screener pick (fallback)")
+                best_asset = candidates[0]
+                best_result = None
+
+            self.symbol = best_asset["symbol"]
+
+            if best_result:
+                risk = best_result["risk_score"]
+                self.leverage = max(1, min(5, round(1 + risk * 2)))
+                self.binance.set_leverage(self.symbol, self.leverage)
+                if best_result.get("weights"):
+                    from snn.neuron import TradingNeuron
+                    self.neurons = [TradingNeuron(nucleus=w) for w in best_result["weights"]]
+                    self._log("SYS", f"Loaded trained weights from backtest ({len(self.neurons)} neurons)")
+                self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (risk_score={risk:.2f})")
+            else:
+                self.leverage = 5
+                self.binance.set_leverage(self.symbol, self.leverage)
+                self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (fallback)")
+
+            print(f"[Screener] Selected {self.symbol} @ ${best_asset['price']:.4f} -> {self.leverage}x")
             self._lot_step = None
             self._lot_min_qty = None
             self._load_lot_size()
         except Exception as e:
-            self._log("ERROR", f"Screener failed: {e}")
+            self._log("ERROR", f"Auto-select failed: {e}")
             self.binance.set_leverage(self.symbol, self.leverage)
 
     def _get_qty(self, price: float) -> float:
