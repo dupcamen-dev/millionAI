@@ -177,7 +177,7 @@ class RealTrader(BaseTrader):
         step = self._lot_step or 0.001
         min_qty = self._lot_min_qty or 0.001
 
-        raw_qty = self.equity * 0.1 * self.leverage / max(price, 1e-8)
+        raw_qty = self.equity * self.leverage / max(price, 1e-8)
         qty = math.floor(raw_qty / step) * step
         qty = max(qty, min_qty)
 
