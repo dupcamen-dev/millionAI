@@ -37,6 +37,7 @@ class RealTrader(BaseTrader):
         self._lot_min_qty = None
         self.auto_symbol = auto_symbol
         self.screener = AssetScreener(self.binance) if auto_symbol else None
+        self.last_screener_candidates = []
         super().__init__(symbol, leverage, config_file, lr, tau, sl, tp)
 
     def _load_lot_size(self):
@@ -71,32 +72,33 @@ class RealTrader(BaseTrader):
             else:
                 self.binance.set_leverage(self.symbol, self.leverage)
             bal = self.binance.get_balance()
-            self.equity = float(bal) if bal else self.equity
+            self.equity = float(bal) if bal else 0.0
             self._log("SYS", f"Balance: ${self.equity:.2f} | Leverage: {self.leverage}x | Symbol: {self.symbol}")
             print(f"[Real] Connected. Balance: ${self.equity:.2f} | {self.symbol} {self.leverage}x")
         except BinanceAPIError as e:
-            if e.code == INVALID_API_KEY:
-                self._log("CRITICAL", f"API key rejected: {e.message}")
-            else:
-                self._log("ERROR", f"Init: [{e.code}] {e.message}")
-            sys.exit(1)
+            msg = ERR_MESSAGES.get(e.code, f"Init: [{e.code}] {e.message}")
+            self._log("ERROR", msg)
+            raise
         except Exception as e:
             self._log("ERROR", f"Init error: {e}")
-            sys.exit(1)
+            raise
 
-    def _auto_select_symbol(self):
+    def _auto_select_symbol(self, top_n=5):
         """Run screener, pick best symbol, set leverage."""
         try:
-            candidates = self.screener.scan(top_n=1)
+            candidates = self.screener.scan(top_n=top_n)
+            self.last_screener_candidates = candidates or []
             if not candidates:
                 self._log("ERROR", "Screener found no candidates, using default symbol")
                 self.binance.set_leverage(self.symbol, self.leverage)
                 return
+            for c in candidates:
+                self._log("SYS", f"Screener: {c['symbol']} @ ${c['price']:.4f} vol={c['volatility']:.2f}% score={c['score']:.4f}")
             best = candidates[0]
             self.symbol = best["symbol"]
             self.leverage = select_leverage(best["volatility"])
             self.binance.set_leverage(self.symbol, self.leverage)
-            self._log("SYS", f"Screener: {self.symbol} (vol={best['volatility']:.2f}%, score={best['score']:.4f}) -> {self.leverage}x")
+            self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (vol={best['volatility']:.2f}%)")
             print(f"[Screener] Selected {self.symbol} @ ${best['price']:.4f} vol={best['volatility']:.2f}% -> {self.leverage}x")
             # Re-load LOT_SIZE for new symbol
             self._lot_step = None

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { apiGet, apiPost, BalanceData, TraderStatus, TraderStartResult } from "@/lib/api";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { apiGet, apiPost, BalanceData, TraderStatus, TraderStartResult, LogEntry, LogsData } from "@/lib/api";
 
-interface Log {
+interface LocalLog {
   time: string;
   text: string;
   type: "sys" | "ai" | "exec" | "ok" | "err";
@@ -16,7 +16,7 @@ export default function TerminalPage() {
   const [traderStatus, setTraderStatus] = useState<TraderStatus | null>(null);
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
-  const [logs, setLogs] = useState<Log[]>([
+  const [logs, setLogs] = useState<LocalLog[]>([
     { time: new Date().toLocaleTimeString(), text: "Connecting to API...", type: "sys" },
   ]);
   const [command, setCommand] = useState("");
@@ -25,6 +25,13 @@ export default function TerminalPage() {
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [logs]);
+
+  const addLog = useCallback((type: LocalLog["type"], text: string) => {
+    setLogs((prev) => [
+      ...prev.slice(-49),
+      { time: new Date().toLocaleTimeString(), text, type },
+    ]);
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -47,7 +54,28 @@ export default function TerminalPage() {
     loadStatus();
     const interval = setInterval(() => { load(); loadStatus(); }, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [addLog]);
+
+  // Poll server logs and merge into local log stream
+  const [lastLogId, setLastLogId] = useState(0);
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const data = await apiGet<LogsData>(`/api/v1/logs?limit=20`);
+        const newLogs = data.logs.filter((l) => l.id > lastLogId);
+        if (newLogs.length > 0) {
+          setLastLogId(newLogs[newLogs.length - 1].id);
+          newLogs.forEach((l) => {
+            const type = l.level === "ERROR" || l.level === "BALANCE" ? "err" : "ok";
+            addLog(type, l.message);
+          });
+        }
+      } catch {}
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, [lastLogId, addLog]);
 
   const handleStart = async () => {
     setStarting(true);
@@ -55,6 +83,11 @@ export default function TerminalPage() {
     try {
       const r = await apiPost<TraderStartResult>("/api/v1/trader/start");
       addLog("ok", `Trader started: ${r.symbol} ${r.leverage}x balance=$${r.balance}`);
+      if (r.candidates && r.candidates.length > 0) {
+        r.candidates.forEach((c: any, i: number) => {
+          addLog("sys", `  #${i+1} ${c.symbol} @ $${c.price} vol=${c.volatility}%`);
+        });
+      }
       setTraderStatus({ running: true, symbol: r.symbol, leverage: r.leverage, equity: r.balance, candles: 0, trades: 0, wins: 0 });
     } catch (e: any) {
       addLog("err", `Start failed: ${e.message}`);
@@ -96,13 +129,6 @@ export default function TerminalPage() {
         addLog("err", `Unknown: ${cmd}`);
     }
     setCommand("");
-  };
-
-  const addLog = (type: Log["type"], text: string) => {
-    setLogs((prev) => [
-      ...prev.slice(-49),
-      { time: new Date().toLocaleTimeString(), text, type },
-    ]);
   };
 
   const totalPnl = positions.reduce((sum, p) => sum + (p.pnl || 0), 0);
@@ -220,7 +246,7 @@ export default function TerminalPage() {
         <div className="p-unit-4 border-b border-surface-variant flex justify-between items-center bg-surface-container-low">
           <h2 className="font-label-caps text-label-caps text-on-surface uppercase">SYS.LOG_STREAM</h2>
         </div>
-        <div ref={logRef} className="h-48 overflow-y-auto p-unit-4 font-code-snippet text-code-snippet text-on-surface-variant flex flex-col gap-unit-1 bg-surface-container-lowest">
+        <div ref={logRef} className="h-64 overflow-y-auto p-unit-4 font-code-snippet text-code-snippet text-on-surface-variant flex flex-col gap-unit-1 bg-surface-container-lowest">
           {logs.map((log, i) => (
             <div key={i} className="flex gap-unit-2">
               <span className="text-outline shrink-0">{log.time}</span>

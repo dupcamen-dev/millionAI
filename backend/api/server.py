@@ -224,6 +224,7 @@ def trader_start(x_access_code: str = Header("")):
             "symbol": trader.symbol,
             "leverage": trader.leverage,
             "balance": round(trader.equity, 2),
+            "candidates": trader.last_screener_candidates,
         }
     except BinanceAPIError as e:
         raise HTTPException(502, f"Binance error: {e.message}")

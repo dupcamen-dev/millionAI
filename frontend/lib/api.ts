@@ -92,4 +92,5 @@ export interface TraderStartResult {
   symbol: string;
   leverage: number;
   balance: number;
+  candidates?: ScreenerAsset[];
 }
