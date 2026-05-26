@@ -6,8 +6,25 @@ import numpy as np
 
 from exchange.binance_rest import BinanceFuturesAPI, BinanceAPIError, INSUFFICIENT_BALANCE, INSUFFICIENT_MARGIN, INVALID_API_KEY, RATE_LIMIT
 from exchange.screener import AssetScreener
-from trader.backtest import quick_backtest
 from .base import BaseTrader
+
+# Try C backtest from compiled library first, fall back to Python
+try:
+    from snn.cwrapper import quick_backtest as _c_quick_backtest
+except (ImportError, FileNotFoundError, OSError):
+    _c_quick_backtest = None
+
+try:
+    from trader.backtest import quick_backtest as _py_quick_backtest
+except ImportError:
+    _py_quick_backtest = None
+
+def quick_backtest(data, **kwargs):
+    if _c_quick_backtest is not None:
+        return _c_quick_backtest(data, **kwargs)
+    if _py_quick_backtest is not None:
+        return _py_quick_backtest(data, **kwargs)
+    raise RuntimeError("No backtest engine available")
 
 ERR_MESSAGES = {
     INSUFFICIENT_BALANCE: "Insufficient balance. Deposit USDT to your Futures wallet.",
@@ -170,6 +187,9 @@ class RealTrader(BaseTrader):
                         except Exception as ex:
                             self._log("WARN", f"Failed to save weights: {ex}")
                 self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (risk={risk:.2f} | {best_result['trades']}t)")
+                # Init compiled C SNN with backtest weights
+                if self.init_c_snn():
+                    self._log("SYS", "C SNN backend initialized (compiled from Million)")
             else:
                 self.leverage = 1
                 self.binance.set_leverage(self.symbol, self.leverage)

@@ -2,6 +2,9 @@
 *.exe
 *.obj
 *.o
+
+# Explicitly allow source C files for the SNN library
+!backend/snn/lib/snn_trader.c
 *.pyc
 __pycache__/
 .DS_Store
@@ -37,3 +40,7 @@ frontend/next-env.d.ts
 # Backend
 backend/.env
 backend/__pycache__/
+
+# Compiled binaries
+*.dll
+*.so

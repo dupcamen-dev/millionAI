@@ -12,6 +12,14 @@ from snn.encoding import encode_ohlcv, SENSORY, BUY_N, SELL_N, TOTAL_N
 from snn.neuron import TradingNeuron, ARCHIVE_N
 from snn.rstpd import RSTDPEngine
 
+# Try to load NativeSNN (compiled C from Million compiler)
+try:
+    from snn.cwrapper import NativeSNN
+    _NATIVE_SNN = NativeSNN
+except (ImportError, FileNotFoundError, OSError) as e:
+    _NATIVE_SNN = None
+    print(f"[Base] C SNN not available: {e}")
+
 INITIAL_EQUITY = 10.0
 
 class BaseTrader:
@@ -39,11 +47,37 @@ class BaseTrader:
         self.max_hold = 24
         self.epsilon = 0.15
         self.last_candle_time = time.time()
+        self._c_snn = None  # NativeSNN instance (compiled C SNN)
 
         if config_file and os.path.exists(config_file):
             self.load_config(config_file)
         else:
             self.init_random()
+
+    def _use_c_backend(self):
+        return _NATIVE_SNN is not None and self._c_snn is not None
+
+    def init_c_snn(self, weights=None, lr=None, tau=None):
+        if _NATIVE_SNN is None:
+            return False
+        if lr is None: lr = self.rstdp.lr
+        if tau is None: tau = -1.0 / math.log(max(self.rstdp.decay, 1e-10))
+        if weights is None and self.neurons:
+            weights = [n.nucleus.tolist() for n in self.neurons]
+        self._c_snn = _NATIVE_SNN(init_weights=weights, lr=lr, tau=tau)
+        return True
+
+    def _sync_weights_from_c(self):
+        if not self._use_c_backend():
+            return
+        w = self._c_snn.get_weights()
+        for i in range(TOTAL_N):
+            self.neurons[i].nucleus = w[i].copy()
+        state = self._c_snn.get_state()
+        self.rstdp.lr = state["lr"]
+        self.rstdp.total_pnl = state["total_pnl"]
+        self.rstdp.trades = state["trades"]
+        self.rstdp.wins = state["wins"]
 
     def init_random(self):
         self.neurons = [TradingNeuron() for _ in range(TOTAL_N)]
@@ -88,8 +122,27 @@ class BaseTrader:
         self.candle_count += 1
         self.last_candle_time = time.time()
         spikes = encode_ohlcv(o, h, l, c, v, self.vol_history)
-        self.forward_all(spikes)
-        action = self.compute_action()
+
+        use_c = self._use_c_backend()
+        if use_c:
+            buy, sell, th = self._c_snn.forward(spikes)
+            if buy > th and buy >= sell:
+                action = 1
+            elif sell > th and sell > buy:
+                action = -1
+            elif random.random() < self.epsilon:
+                action = random.choice([1, -1])
+            else:
+                action = 0
+            # Update Python neuron outputs for logging
+            for i in range(BUY_N):
+                self.neurons[i].output = 0.0  # will be set on next access
+            for i in range(SELL_N):
+                self.neurons[BUY_N + i].output = 0.0
+        else:
+            self.forward_all(spikes)
+            action = self.compute_action()
+
         ts_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts)) if ts else time.strftime("%Y-%m-%d %H:%M")
 
         if self.pos == 0:
@@ -102,25 +155,33 @@ class BaseTrader:
                 side = "BUY" if action == 1 else "SELL"
                 self.on_entry(side, c, ts_str)
             else:
-                for n in self.neurons:
-                    self.rstdp.decay_trace(n.eligibility)
+                if use_c:
+                    self._c_snn.decay_traces()
+                else:
+                    for n in self.neurons:
+                        self.rstdp.decay_trace(n.eligibility)
         else:
             pnl_raw = (c - self.entry_price) / self.entry_price
             curr_unrealized = pnl_raw if self.pos == 1 else -pnl_raw
             curr_levered = curr_unrealized * self.leverage
 
-            for i, n in enumerate(self.neurons):
-                inp = spikes if i < BUY_N else -spikes
-                self.rstdp.accumulate(n.eligibility, inp, n.output)
-
-            if self._has_prev_pnl:
+            if use_c:
+                self._c_snn.accumulate(spikes)
+                if self._has_prev_pnl:
+                    self._c_snn.micro_reward(self.prev_unrealized, curr_levered)
+                self._c_snn.decay_traces()
+            else:
+                for i, n in enumerate(self.neurons):
+                    inp = spikes if i < BUY_N else -spikes
+                    self.rstdp.accumulate(n.eligibility, inp, n.output)
+                if self._has_prev_pnl:
+                    for n in self.neurons:
+                        self.rstdp.micro_reward(n.nucleus, n.eligibility, self.prev_unrealized, curr_levered)
                 for n in self.neurons:
-                    self.rstdp.micro_reward(n.nucleus, n.eligibility, self.prev_unrealized, curr_levered)
+                    self.rstdp.decay_trace(n.eligibility)
+
             self.prev_unrealized = curr_levered
             self._has_prev_pnl = True
-
-            for n in self.neurons:
-                self.rstdp.decay_trace(n.eligibility)
 
             close_reason = None
             if self.sl > 0 and curr_levered <= -self.sl:
@@ -133,8 +194,11 @@ class BaseTrader:
                 close_reason = "SIGNAL"
 
             if close_reason:
-                for n in self.neurons:
-                    _, net = self.rstdp.commit(n.nucleus, n.eligibility, pnl_raw, self.pos)
+                if use_c:
+                    self._c_snn.commit(pnl_raw, self.pos)
+                else:
+                    for n in self.neurons:
+                        _, net = self.rstdp.commit(n.nucleus, n.eligibility, pnl_raw, self.pos)
                 levered_pnl = curr_levered
                 self.equity *= (1.0 + levered_pnl)
                 self.rstdp.commit_stats(levered_pnl)
@@ -142,6 +206,8 @@ class BaseTrader:
                 self.total_pnl += levered_pnl
                 if levered_pnl > 0:
                     self.wins += 1
+                if use_c:
+                    self._sync_weights_from_c()
                 side = "BUY" if self.pos == 1 else "SELL"
                 self.on_exit(side, c, levered_pnl, close_reason, ts_str)
                 self.pos = 0
@@ -150,10 +216,14 @@ class BaseTrader:
             self.equity_curve.append(self.equity)
 
         if self.candle_count % 100 == 0 or self.candle_count <= 3:
-            buy = max(n.output for n in self.neurons[:BUY_N]) if self.neurons else 0
-            sell = max(n.output for n in self.neurons[BUY_N:]) if len(self.neurons) > BUY_N else 0
-            th = self.neurons[0].threshold if self.neurons else 0.3
-            self._log_state(ts_str, buy, sell, th, self.equity, self.epsilon)
+            if use_c:
+                buy, sell, th = self._c_snn.forward(spikes)
+                self._log_state(ts_str, buy, sell, th, self.equity, self.epsilon)
+            else:
+                buy = max(n.output for n in self.neurons[:BUY_N]) if self.neurons else 0
+                sell = max(n.output for n in self.neurons[BUY_N:]) if len(self.neurons) > BUY_N else 0
+                th = self.neurons[0].threshold if self.neurons else 0.3
+                self._log_state(ts_str, buy, sell, th, self.equity, self.epsilon)
 
         sys.stdout.flush()
         return action
