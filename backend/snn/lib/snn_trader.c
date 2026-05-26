@@ -20,7 +20,7 @@
 #define SELL_N         16
 #define TOTAL_N        (BUY_N + SELL_N)
 #define UNFOLD_SIZE    (NUCLEUS_SIZE * 4)
-#define SENSORY        8
+#define SENSORY        14
 #define COMPRESS_OUT   64
 
 /* ==================== ARCHIVE_PROJ_FN — must match Python encoding.py ==================== */
@@ -92,13 +92,15 @@ static void archive_compress(const float* in, int in_size,
     }
 }
 
-/* ==================== OHLCV Encoding ==================== */
+/* ==================== Feature Encoding (14 channels) ==================== */
 
-static void encode_ohlcv(float o, float h, float l, float c, float v,
-                         float* vol_hist, int* vol_len, float* out) {
+static void encode_features(float o, float h, float l, float c, float v,
+                            float* vol_hist, int* vol_len, float* out,
+                            const float* order_book, const float* trade_tape) {
     float spread = h - l;
     if (spread < 1e-8f) spread = 1e-8f;
 
+    /* --- Channels 0-7: OHLCV (same as before) --- */
     out[0] = (c > o) ? 1.0f : 0.0f;
     out[1] = (c < o) ? 1.0f : 0.0f;
 
@@ -112,7 +114,6 @@ static void encode_ohlcv(float o, float h, float l, float c, float v,
     if (out[4] > 1.0f) out[4] = 1.0f;
     if (out[4] < 0.0f) out[4] = 0.0f;
 
-    /* Volume moving average */
     vol_hist[*vol_len % 20] = v;
     (*vol_len)++;
     int n = (*vol_len < 20) ? *vol_len : 20;
@@ -127,6 +128,44 @@ static void encode_ohlcv(float o, float h, float l, float c, float v,
     if (out[6] < -1.0f) out[6] = -1.0f;
 
     out[7] = (c - l) / spread;
+
+    /* --- Channels 8-10: Order Book (default to 0 when NULL) --- */
+    if (order_book) {
+        /* Channel 8: Book imbalance (-1 to +1) */
+        float total = order_book[0] + order_book[1] + 1e-8f;
+        out[8] = (order_book[0] - order_book[1]) / total;
+
+        /* Channel 9: Spread normalized (0 to 1) */
+        float book_bid = order_book[2] > 0 ? order_book[2] : c;
+        float book_ask = order_book[3] > 0 ? order_book[3] : c;
+        out[9] = (book_ask - book_bid) / book_bid;
+        if (out[9] > 0.05f) out[9] = 0.05f;  /* cap extreme spreads */
+
+        /* Channel 10: Wall pressure (bid dominance vs ask dominance) */
+        out[10] = (order_book[4] - order_book[5]) / (order_book[4] + order_book[5] + 1e-8f);
+    } else {
+        out[8] = 0.0f;
+        out[9] = 0.0f;
+        out[10] = 0.0f;
+    }
+
+    /* --- Channels 11-13: Trade Tape (default to 0 when NULL) --- */
+    if (trade_tape) {
+        /* Channel 11: CVD (Cumulative Volume Delta) [-1 to 1] */
+        float total_vol = trade_tape[0] + trade_tape[1] + 1e-8f;
+        out[11] = (trade_tape[0] - trade_tape[1]) / total_vol;
+
+        /* Channel 12: Trade intensity (0 to 3) */
+        out[12] = trade_tape[2] / 100.0f;  /* normalize: ~100 trades/5min = normal */
+        if (out[12] > 3.0f) out[12] = 3.0f;
+
+        /* Channel 13: Large trade ratio (0 to 1) */
+        out[13] = trade_tape[3];
+    } else {
+        out[11] = 0.0f;
+        out[12] = 0.0f;
+        out[13] = 0.0f;
+    }
 }
 
 /* ==================== Neuron Forward ==================== */
@@ -312,7 +351,7 @@ EXPORT void snn_backtest(
             float v = data[c * 5 + 4];
 
             float spikes[SENSORY];
-            encode_ohlcv(o, h, l, cl, v, vol_hist, &vol_len, spikes);
+            encode_features(o, h, l, cl, v, vol_hist, &vol_len, spikes, NULL, NULL);
 
             /* Forward pass */
             float buy_out[BUY_N];

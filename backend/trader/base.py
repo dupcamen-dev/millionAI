@@ -8,7 +8,7 @@ from collections import deque
 
 import numpy as np
 
-from snn.encoding import encode_ohlcv, SENSORY, BUY_N, SELL_N, TOTAL_N
+from snn.encoding import encode_features, encode_ohlcv, SENSORY, BUY_N, SELL_N, TOTAL_N
 from snn.neuron import TradingNeuron, ARCHIVE_N
 from snn.rstpd import RSTDPEngine
 
@@ -132,11 +132,12 @@ class BaseTrader:
             return random.choice([1, -1])
         return 0
 
-    def on_candle(self, o, h, l, c, v, ts=None):
+    def on_candle(self, o, h, l, c, v, ts=None, order_book=None, trade_tape=None):
         self.last_close = c
         self.candle_count += 1
         self.last_candle_time = time.time()
-        spikes = encode_ohlcv(o, h, l, c, v, self.vol_history)
+        spikes = encode_features(o, h, l, c, v, self.vol_history,
+                                  order_book=order_book, trade_tape=trade_tape)
 
         use_c = self._use_c_backend()
         if use_c:

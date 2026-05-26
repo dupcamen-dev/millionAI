@@ -10,7 +10,7 @@ BUY_N = 16
 SELL_N = 16
 TOTAL_N = BUY_N + SELL_N
 NUCLEUS_SIZE = 64
-SENSORY = 8
+SENSORY = 14
 
 
 def _get_lib():
