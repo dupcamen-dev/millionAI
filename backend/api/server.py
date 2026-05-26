@@ -80,9 +80,38 @@ def auth_verify(x_access_code: str = Header("")):
 @app.get("/api/v1/balance")
 def get_balance(x_access_code: str = Header("")):
     user_id = verify_access(x_access_code)
+    api_key, api_secret = get_user_keys(user_id)
+    if not api_key:
+        api_key = os.getenv("API_KEY", "")
+        api_secret = os.getenv("API_SECRET", "")
+    if api_key:
+        try:
+            from exchange.binance_rest import BinanceFuturesAPI, BinanceAPIError
+            api = BinanceFuturesAPI(api_key, api_secret)
+            bal = api.get_balance()
+            equity = float(bal) if bal else 0.0
+            try:
+                raw_positions = api.get_positions()
+                positions = []
+                for p in raw_positions:
+                    amt = float(p.get("positionAmt", 0))
+                    positions.append({
+                        "symbol": p.get("symbol", ""),
+                        "side": "BUY" if amt > 0 else "SELL",
+                        "entry_price": float(p.get("entryPrice", 0)),
+                        "quantity": abs(amt),
+                        "leverage": int(float(p.get("leverage", 1))),
+                        "pnl": float(p.get("unRealizedProfit", 0)),
+                    })
+            except Exception:
+                positions = []
+            return {"equity": equity, "balance": equity, "positions": positions}
+        except Exception:
+            pass
+
     db = get_db()
     if not db:
-        return {"equity": 10.0, "balance": 10.0, "positions": []}
+        return {"equity": 0.0, "balance": 0.0, "positions": []}
     equity_data = db.db.table("equity_curve").select("*").eq("user_id", user_id).order("timestamp", desc=True).limit(1).execute()
     equity = equity_data.data[0]["equity"] if equity_data.data else 0.0
     balance = equity_data.data[0]["balance"] if equity_data.data else 0.0

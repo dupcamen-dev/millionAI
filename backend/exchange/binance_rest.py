@@ -92,6 +92,12 @@ class BinanceFuturesAPI:
             return resp[0]
         return {}
 
+    def get_positions(self) -> list:
+        resp = self._request("GET", "/fapi/v2/positionRisk", signed=True)
+        if isinstance(resp, list):
+            return [p for p in resp if abs(float(p.get("positionAmt", 0))) > 0]
+        return []
+
     def set_leverage(self, symbol: str, leverage: int):
         return self._request("POST", "/fapi/v1/leverage", signed=True, params={"symbol": symbol.upper(), "leverage": leverage})
 
