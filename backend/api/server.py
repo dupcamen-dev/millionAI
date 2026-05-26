@@ -129,7 +129,7 @@ def get_balance(x_access_code: str = Header("")):
 
 # ── Logs ──────────────────────────────────────────────────────────────
 @app.get("/api/v1/logs")
-def get_logs(level: str = "", search: str = "", limit: int = 100, offset: int = 0, x_access_code: str = Header("")):
+def get_logs(level: str = "", search: str = "", limit: int = 100, offset: int = 0, since_id: int = 0, x_access_code: str = Header("")):
     user_id = verify_access(x_access_code)
     db = get_db()
     if not db:
@@ -139,7 +139,9 @@ def get_logs(level: str = "", search: str = "", limit: int = 100, offset: int = 
         query = query.eq("level", level.lower())
     if search:
         query = query.ilike("message", f"%{search}%")
-    query = query.order("created_at", desc=True).range(offset, offset + limit - 1)
+    if since_id:
+        query = query.gt("id", since_id)
+    query = query.order("id", desc=False).range(offset, offset + limit - 1)
     result = query.execute()
     return {"logs": result.data, "total": result.count}
 

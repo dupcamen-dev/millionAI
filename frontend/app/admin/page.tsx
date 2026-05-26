@@ -72,16 +72,15 @@ export default function TerminalPage() {
   useEffect(() => {
     const poll = async () => {
       try {
-        const data = await apiGet<LogsData>(`/api/v1/logs?limit=50`);
+        const data = await apiGet<LogsData>(`/api/v1/logs?limit=50&since_id=${lastLogId > 0 ? lastLogId : 0}`);
+        const maxId = data.logs.length > 0 ? Math.max(...data.logs.map((l) => l.id)) : 0;
         if (lastLogId === -1) {
-          if (data.logs.length > 0) {
-            setLastLogId(data.logs[data.logs.length - 1].id);
-          } else {
-            setLastLogId(0);
-          }
+          setLastLogId(maxId || 0);
           return;
         }
-        const newLogs = data.logs.filter((l) => l.id > lastLogId);
+        const newLogs = data.logs
+          .filter((l) => l.id > lastLogId)
+          .sort((a, b) => a.id - b.id);
         if (newLogs.length > 0) {
           setLastLogId(newLogs[newLogs.length - 1].id);
           newLogs.forEach((l) => {
