@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiGet, apiPost, ApiKeysData } from "@/lib/api";
+import { apiGet, apiPost, getAccessCode, ApiKeysData } from "@/lib/api";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
@@ -16,9 +16,7 @@ export default function ApiConfigPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = localStorage.getItem("MILLION_ACCESS_CODE");
-    if (stored !== "1231") {
+    if (getAccessCode() !== "1231") {
       router.push("/access");
     } else {
       setAuthorized(true);

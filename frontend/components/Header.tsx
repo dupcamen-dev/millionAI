@@ -2,16 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const NAV_ITEMS = [
-  { label: "INDEX", href: "/" },
-  { label: "ACCESS", href: "/access" },
-  { label: "ADMIN", href: "/admin" },
-  { label: "API", href: "/settings/api" },
-] as const;
+import { getAccessCode } from "@/lib/api";
 
 export default function Header() {
   const pathname = usePathname();
+  const authorized = getAccessCode() === "1231";
 
   return (
     <header className="bg-background border-b border-outline-variant flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop h-16 shrink-0 z-50">
@@ -19,23 +14,27 @@ export default function Header() {
         MILLION
       </Link>
       <nav className="hidden md:flex gap-unit-4 font-label-caps text-label-caps">
-        {NAV_ITEMS.map((item) => {
-          const active = pathname === item.href;
-          return active ? (
-            <span key={item.href} className="bg-primary-fixed-dim text-on-primary px-unit-2 py-unit-1 opacity-90 uppercase cursor-default">
-              {item.label}
-            </span>
-          ) : (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="text-primary-fixed-dim hover:bg-primary-fixed-dim hover:text-on-primary px-unit-2 py-unit-1 transition-colors duration-100 uppercase"
-            >
-              {item.label}
-            </Link>
-          );
-        })}
+        <HeaderLink href="/" label="INDEX" pathname={pathname} />
+        <HeaderLink href="/access" label="ACCESS" pathname={pathname} />
+        {authorized && <HeaderLink href="/admin" label="ADMIN" pathname={pathname} />}
+        {authorized && <HeaderLink href="/settings/api" label="API" pathname={pathname} />}
       </nav>
     </header>
+  );
+}
+
+function HeaderLink({ href, label, pathname }: { href: string; label: string; pathname: string }) {
+  const active = pathname === href;
+  return active ? (
+    <span className="bg-primary-fixed-dim text-on-primary px-unit-2 py-unit-1 opacity-90 uppercase cursor-default">
+      {label}
+    </span>
+  ) : (
+    <Link
+      href={href}
+      className="text-primary-fixed-dim hover:bg-primary-fixed-dim hover:text-on-primary px-unit-2 py-unit-1 transition-colors duration-100 uppercase"
+    >
+      {label}
+    </Link>
   );
 }

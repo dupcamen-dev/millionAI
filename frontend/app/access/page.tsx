@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost } from "@/lib/api";
+import { apiPost, setAccessCode } from "@/lib/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -33,7 +33,7 @@ export default function AccessPage() {
       const data = await res.json();
       if (data.valid) {
         setStatus("> ACCESS GRANTED. REDIRECTING...");
-        localStorage.setItem("MILLION_ACCESS_CODE", code);
+        setAccessCode(code);
         await new Promise((r) => setTimeout(r, 500));
         router.push("/admin");
       } else {

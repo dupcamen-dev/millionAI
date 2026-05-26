@@ -1,10 +1,15 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+let _accessCode: string | null = null;
+
+export function setAccessCode(code: string) { _accessCode = code; }
+export function getAccessCode(): string | null { return _accessCode; }
+export function clearAccessCode() { _accessCode = null; }
+
 function headers(): Record<string, string> {
-  const code = typeof window !== "undefined" ? localStorage.getItem("MILLION_ACCESS_CODE") : "";
   return {
     "Content-Type": "application/json",
-    "X-Access-Code": code || "",
+    "X-Access-Code": _accessCode || "",
   };
 }
 
