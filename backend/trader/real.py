@@ -222,7 +222,7 @@ class RealTrader(BaseTrader):
         step = self._lot_step or 0.001
         min_qty = self._lot_min_qty or 0.001
 
-        raw_qty = self.equity * self.leverage / max(price, 1e-8)
+        raw_qty = self.equity * self.leverage * 0.95 / max(price, 1e-8)
         qty = math.floor(raw_qty / step) * step
         qty = max(qty, min_qty)
 
@@ -256,6 +256,7 @@ class RealTrader(BaseTrader):
                 self.pos = 0
                 return
 
+            self._log("EXEC", f"ORDER: {side} {qty} {self.symbol} notional=${qty*price:.2f} margin=${needed:.2f} balance=${self.equity:.2f}")
             order = self.binance.market_order(self.symbol, side, qty)
             filled_qty = order.get("executedQty", "0")
             fill_price = order.get("avgPrice", str(price))

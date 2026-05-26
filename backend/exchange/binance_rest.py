@@ -89,7 +89,7 @@ class BinanceFuturesAPI:
         resp = self._request("GET", "/fapi/v2/account", signed=True)
         for asset in resp.get("assets", []):
             if asset["asset"] == "USDT":
-                return float(asset["walletBalance"])
+                return float(asset["availableBalance"] or asset["walletBalance"])
         return 0.0
 
     def get_position(self, symbol: str) -> dict:
