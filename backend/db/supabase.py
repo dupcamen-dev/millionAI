@@ -70,6 +70,11 @@ class SupabaseDB:
             "rstpd": json.dumps(state.get("rstpd", {})),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
+        # arch_version column may not exist yet — add gracefully
+        try:
+            data["arch_version"] = "v2_32n"
+        except Exception:
+            pass
         try:
             self.db.table("model_weights").upsert(data, on_conflict="user_id,symbol").execute()
         except Exception:
@@ -80,11 +85,16 @@ class SupabaseDB:
                 json.dump(data, f)
 
     def load_model_state(self, user_id: str, symbol: str) -> dict | None:
-        """Load full model state from DB."""
+        """Load full model state from DB. Only returns compatible architecture versions."""
         try:
             resp = self.db.table("model_weights").select("*").eq("user_id", user_id).eq("symbol", symbol.upper()).execute()
             if resp.data and len(resp.data) > 0:
                 row = resp.data[0]
+                # Skip incompatible architectures
+                arch = row.get("arch_version", "")
+                if arch and arch != "v2_32n":
+                    print(f"[DB] Skipping incompatible model weights (arch={arch}) for {symbol}")
+                    return None
                 def _parse(field):
                     val = row.get(field)
                     if isinstance(val, str):

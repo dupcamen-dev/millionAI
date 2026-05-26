@@ -63,11 +63,10 @@ class RealTrader(BaseTrader):
                         if f["filterType"] == "LOT_SIZE":
                             self._lot_step = float(f["stepSize"])
                             self._lot_min_qty = float(f["minQty"])
-                            return
-                    for f in s.get("filters", []):
                         if f["filterType"] == "MIN_NOTIONAL":
                             self._min_notional = float(f.get("notional", 5))
-                            return
+                    self._log("SYS", f"Lot: step={self._lot_step} min_qty={self._lot_min_qty} min_notional={self._min_notional}")
+                    return
             self._lot_step = 0.001
             self._lot_min_qty = 0.001
         except Exception as e:
@@ -138,7 +137,7 @@ class RealTrader(BaseTrader):
                 t0 = time.time()
                 try:
                     self._log("SYS", f"  Fetching klines for {a['symbol']}...")
-                    raw = self.binance.get_klines(a["symbol"], "5m", 2000)
+                    raw = self.binance.get_klines(a["symbol"], "5m", 1500)
                     self._log("SYS", f"  Got {len(raw) if raw else 0} candles in {time.time()-t0:.1f}s")
                 except Exception as e:
                     self._log("WARN", f"  skip — kline fetch failed: {e}")

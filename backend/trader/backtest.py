@@ -52,7 +52,7 @@ def quick_backtest(data, lr=0.01, tau=24.0, sl=0.05, tp=0.12, fee=0.002, use_mic
                     for i, n in enumerate(neurons):
                         inp = spikes if i < BUY_N else neg
                         if n.output > 0:
-                            n.nucleus[:SENSORY] += 0.001 * inp[:SENSORY] * n.output
+                            n.nucleus[:SENSORY] += 0.0005 * inp[:SENSORY] * n.output
             else:
                 pnl_raw = (cl - entry_price) / entry_price
                 curr = pnl_raw if pos == 1 else -pnl_raw

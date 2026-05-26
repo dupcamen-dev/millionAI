@@ -347,14 +347,14 @@ EXPORT void snn_backtest(
                     for (int i = 0; i < BUY_N; i++) {
                         if (g_neurons[i].output > 0.0f) {
                             for (int j = 0; j < SENSORY; j++)
-                                g_neurons[i].nucleus[j] += 0.001f * spikes[j] * g_neurons[i].output;
+                                g_neurons[i].nucleus[j] += 0.0005f * spikes[j] * g_neurons[i].output;
                         }
                     }
                     for (int i = 0; i < SELL_N; i++) {
                         int idx = BUY_N + i;
                         if (g_neurons[idx].output > 0.0f) {
                             for (int j = 0; j < SENSORY; j++)
-                                g_neurons[idx].nucleus[j] += 0.001f * neg_spikes[j] * g_neurons[idx].output;
+                                g_neurons[idx].nucleus[j] += 0.0005f * neg_spikes[j] * g_neurons[idx].output;
                         }
                     }
                     /* L2 weight decay */
