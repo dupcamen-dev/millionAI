@@ -24,7 +24,7 @@ export default function StrategyPage() {
   useEffect(() => {
     apiGet<StrategyData>("/api/v1/strategy").then((data) => {
       setStrategy(data);
-      if (data.neurons?.length === 16) setWeights(data.neurons);
+      if (data.neurons?.length > 0) setWeights(data.neurons);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -51,9 +51,9 @@ export default function StrategyPage() {
           <h1 className="font-headline-lg text-headline-lg text-on-surface uppercase">STRATEGY</h1>
           <p className="font-code-snippet text-code-snippet text-outline mt-unit-1">
             {isLive ? (
-              <>&gt; LIVE: {strategy?.symbol} {strategy?.leverage}x | 16 NEURONS x 64 WEIGHTS | {strategy?.trades || 0}T {strategy?.wins || 0}W</>
+              <>&gt; LIVE: {strategy?.symbol} {strategy?.leverage}x | {strategy?.neurons?.length || strategy?.neurons?.length || weights.length} NEURONS x 64 WEIGHTS | {strategy?.trades || 0}T {strategy?.wins || 0}W</>
             ) : weights.length > 0 ? (
-              <>&gt; SAVED: {strategy?.symbol} {strategy?.leverage}x | 16 NEURONS x 64 WEIGHTS</>
+              <>&gt; SAVED: {strategy?.symbol} {strategy?.leverage}x | {strategy?.neurons?.length || weights.length} NEURONS x 64 WEIGHTS</>
             ) : (
               "> NO MODEL DATA. START TRADER TO TRAIN."
             )}
