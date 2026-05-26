@@ -165,7 +165,6 @@ class RealTrader(BaseTrader):
                 self.binance.set_leverage(self.symbol, self.leverage)
                 if best_result.get("weights"):
                     from snn.neuron import TradingNeuron
-                    import numpy as np
                     self.neurons = [TradingNeuron(nucleus=np.array(w, dtype=np.float32)) for w in best_result["weights"]]
                     self._log("SYS", f"Loaded trained weights from backtest ({len(self.neurons)} neurons)")
                     if self.db and self.user_id:
