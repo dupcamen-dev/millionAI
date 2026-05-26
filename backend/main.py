@@ -5,6 +5,7 @@ Usage:
     python main.py --mode paper --symbol SAGAUSDT    # paper trade
     python main.py --mode real --access-code 1231     # real trade, keys from Supabase
     python main.py --mode real --api-key X --api-secret Y   # real trade with direct keys
+    python main.py --mode real --auto-symbol 1              # real trade with screener + auto symbol/leverage
 """
 import argparse
 import os
@@ -29,6 +30,7 @@ def main():
     parser.add_argument("--tau", type=float, default=24.0)
     parser.add_argument("--sl", type=float, default=0.05)
     parser.add_argument("--tp", type=float, default=0.12)
+    parser.add_argument("--auto-symbol", default=os.getenv("AUTO_SYMBOL", ""))
     parser.add_argument("--supabase-url", default=os.getenv("SUPABASE_URL", ""))
     parser.add_argument("--supabase-key", default=os.getenv("SUPABASE_SERVICE_KEY", ""))
     args = parser.parse_args()
@@ -71,12 +73,14 @@ def main():
             print("Error: --api-key and --api-secret required for real mode (or set ACCESS_CODE + Supabase)")
             sys.exit(1)
         from trader.real import RealTrader
+        auto_sym = args.auto_symbol.lower() in ("1", "true", "yes", "on") if args.auto_symbol else (args.symbol == "")
         trader = RealTrader(
             api_key, api_secret,
             symbol=args.symbol, leverage=args.leverage,
             config_file=args.config or None,
             lr=args.lr, tau=args.tau, sl=args.sl, tp=args.tp,
             db=db, telegram_queue=msg_queue,
+            auto_symbol=auto_sym,
         )
         if user_id:
             trader.set_user(user_id)

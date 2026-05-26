@@ -1,28 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { apiGet, apiPost, StrategyData } from "@/lib/api";
 
 const NEURON_LABELS = ["N0", "N1", "N2", "N3", "N4", "N5", "N6", "N7", "N8", "N9", "N10", "N11", "N12", "N13", "N14", "N15"];
 const KERNEL_LABELS = Array.from({ length: 64 }, (_, i) => `K${i}`);
-
-function generateWeights(): number[][] {
-  const neurons = 16;
-  const kernels = 64;
-  const w: number[][] = [];
-  for (let n = 0; n < neurons; n++) {
-    const row: number[] = [];
-    const pop = n < 8 ? 1 : -1;
-    for (let k = 0; k < kernels; k++) {
-      const base = pop * (Math.random() * 0.1 + 0.02);
-      const noise = (Math.random() - 0.5) * 0.08;
-      row.push(Math.max(-0.238, Math.min(0.228, base + noise)));
-    }
-    w.push(row);
-  }
-  return w;
-}
-
-const WEIGHTS = generateWeights();
 
 function weightColor(w: number): string {
   const norm = (w + 0.238) / (0.238 + 0.228);
@@ -32,14 +14,28 @@ function weightColor(w: number): string {
 }
 
 export default function StrategyPage() {
+  const [weights, setWeights] = useState<number[][]>([]);
   const [selectedNeuron, setSelectedNeuron] = useState<number | null>(null);
   const [view, setView] = useState<"matrix" | "distribution">("matrix");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    apiGet<StrategyData>("/api/v1/strategy").then((data) => {
+      if (data.neurons?.length === 16) setWeights(data.neurons);
+    }).catch(() => {});
+  }, []);
+
+  const handleSave = async () => {
+    await apiPost("/api/v1/strategy", { neurons: weights });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
 
   const meanW = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
-  const buyWeights = WEIGHTS.slice(0, 8).flat();
-  const sellWeights = WEIGHTS.slice(8, 16).flat();
-  const buyMean = meanW(buyWeights);
-  const sellMean = meanW(sellWeights);
+  const buyWeights = weights.slice(0, 8).flat();
+  const sellWeights = weights.slice(8, 16).flat();
+  const buyMean = buyWeights.length ? meanW(buyWeights) : 0;
+  const sellMean = sellWeights.length ? meanW(sellWeights) : 0;
 
   return (
     <>
@@ -68,6 +64,12 @@ export default function StrategyPage() {
             }`}
           >
             DISTRIBUTION
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-unit-4 py-unit-2 border border-primary-fixed-dim text-primary-fixed-dim hover:bg-primary-fixed-dim hover:text-on-primary transition-colors uppercase"
+          >
+            {saved ? "SAVED" : "SAVE"}
           </button>
         </div>
       </div>
@@ -112,7 +114,7 @@ export default function StrategyPage() {
                 </tr>
               </thead>
               <tbody>
-                {WEIGHTS.map((row, ni) => (
+                {weights.map((row, ni) => (
                   <tr
                     key={ni}
                     onClick={() => setSelectedNeuron(selectedNeuron === ni ? null : ni)}

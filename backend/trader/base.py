@@ -93,6 +93,7 @@ class BaseTrader:
         ts_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts)) if ts else time.strftime("%Y-%m-%d %H:%M")
 
         if self.pos == 0:
+            self.epsilon = max(0.02, self.epsilon * 0.995)
             if action != 0:
                 self.pos = action
                 self.entry_price = c
@@ -101,7 +102,6 @@ class BaseTrader:
                 side = "BUY" if action == 1 else "SELL"
                 self.on_entry(side, c, ts_str)
             else:
-                self.epsilon = max(0.02, self.epsilon * 0.999)
                 for n in self.neurons:
                     self.rstdp.decay_trace(n.eligibility)
         else:

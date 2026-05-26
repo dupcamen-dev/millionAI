@@ -8,12 +8,52 @@ import urllib.parse
 
 FAPI_BASE = "https://fapi.binance.com"
 
+class BinanceAPIError(RuntimeError):
+    def __init__(self, code: int, message: str, raw_body: str = ""):
+        self.code = code
+        self.message = message
+        self.raw_body = raw_body
+        super().__init__(f"[{code}] {message}")
+
+    @classmethod
+    def from_response(cls, body: str):
+        try:
+            data = json.loads(body)
+            return cls(data.get("code", 0), data.get("msg", body), body)
+        except json.JSONDecodeError:
+            return cls(0, body, body)
+
+BALANCE_ERR_CODES = {-2019, -2018, -2015, -1015, -2011, -2010, -2012, -2021, -2022}
+INSUFFICIENT_BALANCE = -2019
+INSUFFICIENT_MARGIN = -2021
+INVALID_API_KEY = -2015
+RATE_LIMIT = -1015
+ORDER_REJECTED = -2011
+
 class BinanceFuturesAPI:
     def __init__(self, api_key: str, api_secret: str):
         self.api_key = api_key
         self.api_secret = api_secret.encode("utf-8")
+        self._exchange_info_cache = None
+        self._exchange_info_ts = 0
+        self._time_offset = 0
+        self._sync_time()
+
+    def _sync_time(self):
+        """Fetch Binance server time and compute local offset."""
+        try:
+            url = f"{FAPI_BASE}/fapi/v1/time"
+            with urllib.request.urlopen(url, timeout=10) as r:
+                server_ms = json.loads(r.read())["serverTime"]
+            local_ms = int(time.time() * 1000)
+            self._time_offset = server_ms - local_ms
+            print(f"[Binance] Time offset: {self._time_offset}ms")
+        except Exception as e:
+            print(f"[Binance] Time sync failed: {e}, using 0 offset")
 
     def _sign(self, params: dict) -> str:
+        params["timestamp"] = int(time.time() * 1000) + self._time_offset
+        params["recvWindow"] = 5000
         query = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
         signature = hmac.new(self.api_secret, query.encode("utf-8"), hashlib.sha256).hexdigest()
         return f"{query}&signature={signature}"
@@ -21,8 +61,6 @@ class BinanceFuturesAPI:
     def _request(self, method: str, path: str, signed: bool = False, params: dict = None) -> dict:
         params = params or {}
         if signed:
-            params["timestamp"] = int(time.time() * 1000)
-            params["recvWindow"] = 5000
             query = self._sign(params)
             url = f"{FAPI_BASE}{path}?{query}"
         else:
@@ -36,7 +74,10 @@ class BinanceFuturesAPI:
                 return json.loads(r.read())
         except urllib.error.HTTPError as e:
             body = e.read().decode()
-            raise RuntimeError(f"Binance API error {e.code} {path}: {body}")
+            err = BinanceAPIError.from_response(body)
+            raise err
+        except urllib.error.URLError as e:
+            raise BinanceAPIError(0, f"Network error: {e.reason}")
 
     def get_balance(self) -> float:
         resp = self._request("GET", "/fapi/v2/account", signed=True)
@@ -94,7 +135,13 @@ class BinanceFuturesAPI:
         return self._request("GET", "/fapi/v1/klines", signed=False, params=params)
 
     def get_exchange_info(self) -> dict:
-        return self._request("GET", "/fapi/v1/exchangeInfo", signed=False)
+        now = time.time()
+        if self._exchange_info_cache and now - self._exchange_info_ts < 300:
+            return self._exchange_info_cache
+        info = self._request("GET", "/fapi/v1/exchangeInfo", signed=False)
+        self._exchange_info_cache = info
+        self._exchange_info_ts = now
+        return info
 
     def get_ticker(self, symbol: str = None) -> dict:
         params = {}

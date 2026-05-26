@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiGet, apiPost, ApiKeysData } from "@/lib/api";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
@@ -21,18 +22,30 @@ export default function ApiConfigPage() {
       router.push("/access");
     } else {
       setAuthorized(true);
+      apiGet<ApiKeysData>("/api/v1/settings/keys").then((data) => {
+        setApiKey(data.api_key || "");
+        setApiSecret(data.api_secret || "");
+        setTelegramToken(data.telegram_bot_token || "");
+        setTelegramChatId(data.telegram_chat_id || "");
+      }).catch(() => {});
     }
   }, [router]);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!apiKey || !apiSecret) return;
-    localStorage.setItem("MILLION_API_KEY", apiKey);
-    localStorage.setItem("MILLION_API_SECRET", apiSecret);
-    localStorage.setItem("MILLION_TELEGRAM_BOT_TOKEN", telegramToken);
-    localStorage.setItem("MILLION_TELEGRAM_CHAT_ID", telegramChatId);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      await apiPost("/api/v1/settings/keys", {
+        api_key: apiKey,
+        api_secret: apiSecret,
+        telegram_bot_token: telegramToken,
+        telegram_chat_id: telegramChatId,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      alert("Failed to save keys");
+    }
   };
 
   if (!authorized) return null;
@@ -101,7 +114,7 @@ export default function ApiConfigPage() {
               <div className="flex justify-between items-center mt-unit-4">
                 <div className="font-code-snippet text-code-snippet text-on-surface-variant">
                   {saved ? (
-                    <span className="text-primary-fixed-dim">&gt; KEYS_SAVED_SECURELY</span>
+                    <span className="text-primary-fixed-dim">&gt; KEYS_SAVED_TO_SERVER</span>
                   ) : (
                     <span>&gt; AWAITING_CONFIGURATION</span>
                   )}
@@ -125,7 +138,7 @@ export default function ApiConfigPage() {
               <li>Create a new API key with futures trading permissions</li>
               <li>Copy the API Key and Secret Key</li>
               <li>Paste them above and save</li>
-              <li>Keys are stored locally and never sent to our servers</li>
+              <li>Keys are stored securely on the server</li>
             </ol>
           </div>
         </div>

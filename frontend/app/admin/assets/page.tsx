@@ -1,26 +1,38 @@
 "use client";
 
-import { useState } from "react";
-
-const SCREENED_ASSETS = [
-  { symbol: "SAGAUSDT", price: 2.84, volume: 285_000_000, volatility: 3.2, risk: 1.54, signal: "BUY" },
-  { symbol: "XANUSDT", price: 0.52, volume: 412_000_000, volatility: 4.1, risk: 2.10, signal: "NEUTRAL" },
-  { symbol: "ESPORTSUSDT", price: 0.089, volume: 275_000_000, volatility: 5.8, risk: 2.45, signal: "SELL" },
-  { symbol: "BTCUSDT", price: 64250, volume: 18_200_000_000, volatility: 1.8, risk: 0.90, signal: "NEUTRAL" },
-  { symbol: "ETHUSDT", price: 3450, volume: 9_800_000_000, volatility: 2.1, risk: 1.05, signal: "BUY" },
-  { symbol: "SOLUSDT", price: 142, volume: 3_400_000_000, volatility: 3.5, risk: 1.75, signal: "NEUTRAL" },
-  { symbol: "LINKUSDT", price: 19.20, volume: 890_000_000, volatility: 2.8, risk: 1.40, signal: "SELL" },
-  { symbol: "DOGEUSDT", price: 0.12, volume: 1_200_000_000, volatility: 4.5, risk: 2.25, signal: "NEUTRAL" },
-];
+import { useEffect, useState } from "react";
+import { apiGet, ScreenerAsset } from "@/lib/api";
 
 const FILTERS = ["ALL", "BUY", "SELL", "NEUTRAL"];
 
 export default function AssetsPage() {
+  const [assets, setAssets] = useState<ScreenerAsset[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("ALL");
   const [search, setSearch] = useState("");
 
-  const filtered = SCREENED_ASSETS.filter((a) => {
-    if (filter !== "ALL" && a.signal !== filter) return false;
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await apiGet<{ assets: ScreenerAsset[] }>("/api/v1/assets/screener");
+        setAssets(data.assets);
+      } catch {
+        console.error("Screener failed");
+      }
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const getSignal = (a: ScreenerAsset): string => {
+    if (a.score > 10) return "BUY";
+    if (a.score < 5) return "SELL";
+    return "NEUTRAL";
+  };
+
+  const filtered = assets.filter((a) => {
+    const sig = getSignal(a);
+    if (filter !== "ALL" && sig !== filter) return false;
     if (search && !a.symbol.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -30,7 +42,9 @@ export default function AssetsPage() {
       <div className="border-b border-surface-variant pb-unit-2 flex justify-between items-end">
         <div>
           <h1 className="font-headline-lg text-headline-lg text-on-surface uppercase">ASSETS</h1>
-          <p className="font-code-snippet text-code-snippet text-outline mt-unit-1">&gt; SCREENER.ACTIVE: 8 ASSETS</p>
+          <p className="font-code-snippet text-code-snippet text-outline mt-unit-1">
+            &gt; SCREENER.ACTIVE: {assets.length} ASSETS
+          </p>
         </div>
         <div className="font-label-caps text-label-caps text-primary-fixed-dim uppercase opacity-70">
           VOL &gt; $100M &nbsp;|&nbsp; PRICE &lt; $1000
@@ -70,37 +84,44 @@ export default function AssetsPage() {
                 <th className="p-unit-4 uppercase font-normal text-right">PRICE</th>
                 <th className="p-unit-4 uppercase font-normal text-right">24h VOLUME</th>
                 <th className="p-unit-4 uppercase font-normal text-right">VOLATILITY</th>
-                <th className="p-unit-4 uppercase font-normal text-right">RISK SCORE</th>
+                <th className="p-unit-4 uppercase font-normal text-right">SCORE</th>
                 <th className="p-unit-4 uppercase font-normal text-center">SIGNAL</th>
               </tr>
             </thead>
             <tbody className="font-code-snippet text-code-snippet text-on-surface">
-              {filtered.map((a) => (
-                <tr key={a.symbol} className="border-b border-surface-variant hover:bg-surface-container-low transition-colors group">
-                  <td className="p-unit-4 font-bold text-primary-fixed-dim">{a.symbol}</td>
-                  <td className="p-unit-4 text-right">
-                    {a.price >= 1000 ? `$${a.price.toLocaleString()}` : `$${a.price}`}
-                  </td>
-                  <td className="p-unit-4 text-right text-on-surface-variant">
-                    ${(a.volume / 1_000_000).toFixed(0)}M
-                  </td>
-                  <td className="p-unit-4 text-right">{a.volatility.toFixed(1)}%</td>
-                  <td className="p-unit-4 text-right">{a.risk.toFixed(2)}</td>
-                  <td className="p-unit-4 text-center">
-                    <span
-                      className={`px-unit-2 py-unit-1 uppercase text-[11px] tracking-widest ${
-                        a.signal === "BUY"
-                          ? "bg-primary-fixed-dim text-on-primary"
-                          : a.signal === "SELL"
-                          ? "bg-error text-on-error"
-                          : "border border-outline text-outline"
-                      }`}
-                    >
-                      {a.signal}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {loading ? (
+                <tr><td colSpan={6} className="p-unit-8 text-center text-outline">&gt; SCANNING BINANCE...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={6} className="p-unit-8 text-center text-outline">&gt; NO ASSETS MATCH FILTER</td></tr>
+              ) : (
+                filtered.map((a) => {
+                  const sig = getSignal(a);
+                  return (
+                    <tr key={a.symbol} className="border-b border-surface-variant hover:bg-surface-container-low transition-colors group">
+                      <td className="p-unit-4 font-bold text-primary-fixed-dim">{a.symbol}</td>
+                      <td className="p-unit-4 text-right">${a.price.toFixed(4)}</td>
+                      <td className="p-unit-4 text-right text-on-surface-variant">
+                        ${(a.volume / 1_000_000).toFixed(0)}M
+                      </td>
+                      <td className="p-unit-4 text-right">{a.volatility.toFixed(2)}%</td>
+                      <td className="p-unit-4 text-right">{a.score.toFixed(2)}</td>
+                      <td className="p-unit-4 text-center">
+                        <span
+                          className={`px-unit-2 py-unit-1 uppercase text-[11px] tracking-widest ${
+                            sig === "BUY"
+                              ? "bg-primary-fixed-dim text-on-primary"
+                              : sig === "SELL"
+                              ? "bg-error text-on-error"
+                              : "border border-outline text-outline"
+                          }`}
+                        >
+                          {sig}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

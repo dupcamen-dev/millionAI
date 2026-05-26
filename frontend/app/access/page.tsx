@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { apiPost } from "@/lib/api";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function AccessPage() {
   const router = useRouter();
@@ -21,14 +24,22 @@ export default function AccessPage() {
     if (!code.trim()) return;
 
     setStatus("> VERIFYING ACCESS CODE...");
-    await new Promise((r) => setTimeout(r, 1000));
 
-    if (code === "1231") {
-      setStatus("> ACCESS GRANTED. REDIRECTING...");
-      localStorage.setItem("MILLION_ACCESS_CODE", code);
-      await new Promise((r) => setTimeout(r, 500));
-      router.push("/admin");
-    } else {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/auth/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Access-Code": code },
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setStatus("> ACCESS GRANTED. REDIRECTING...");
+        localStorage.setItem("MILLION_ACCESS_CODE", code);
+        await new Promise((r) => setTimeout(r, 500));
+        router.push("/admin");
+      } else {
+        throw new Error("invalid");
+      }
+    } catch {
       setError(true);
       setStatus("> AUTH FAILED: INVALID CREDENTIALS");
       setTimeout(() => {
