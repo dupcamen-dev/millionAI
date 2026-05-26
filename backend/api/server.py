@@ -29,7 +29,7 @@ CONFIG_PATH = os.getenv("CONFIG_FILE", "") or os.path.join(os.path.dirname(__fil
 
 _db = None
 _telegram_bot = None
-_trader_instance = {"trader": None, "thread": None, "listener": None, "user_id": None}
+_trader_instance = {"trader": None, "thread": None, "listener": None, "user_id": None, "initializing": False, "init_error": None}
 
 def get_db():
     global _db
