@@ -33,3 +33,7 @@ frontend/.env
 frontend/.env.local
 frontend/*.tsbuildinfo
 frontend/next-env.d.ts
+
+# Backend
+backend/.env
+backend/__pycache__/

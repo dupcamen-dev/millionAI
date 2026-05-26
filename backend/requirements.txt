@@ -1,0 +1,4 @@
+numpy>=1.24
+websocket-client>=1.6
+supabase>=2.0
+python-dotenv>=1.0
