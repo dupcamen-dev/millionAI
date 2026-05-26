@@ -111,7 +111,12 @@ class RealTrader(BaseTrader):
 
             for idx, a in enumerate(backtest_list, 1):
                 self._log("SYS", f"Backtest {idx}/{total}: {a['symbol']}...")
-                raw = self.binance.get_klines(a["symbol"], "5m", 500)
+                try:
+                    raw = self.binance.get_klines(a["symbol"], "5m", 500)
+                except Exception as e:
+                    self._log("WARN", f"  skip — kline fetch failed: {e}")
+                    time.sleep(1)
+                    continue
                 if not raw or len(raw) < 100:
                     self._log("WARN", f"  skip — insufficient data ({len(raw) if raw else 0} candles)")
                     continue
