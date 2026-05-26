@@ -278,22 +278,6 @@ def trader_start(x_access_code: str = Header("")):
             thread = threading.Thread(target=listener.connect, args=(trader.symbol, "5m"), daemon=True)
             thread.start()
 
-            def restart_ws():
-                global _trader_instance
-                old = _trader_instance.get("listener")
-                if old:
-                    try:
-                        old.stop()
-                    except Exception:
-                        pass
-                new_l = BinanceWSListener(trader.on_candle)
-                new_t = threading.Thread(target=new_l.connect, args=(trader.symbol, "5m"), daemon=True)
-                new_t.start()
-                _trader_instance["listener"] = new_l
-                _trader_instance["thread"] = new_t
-
-            trader._restart_ws = restart_ws
-
             _trader_instance = {"trader": trader, "thread": thread, "listener": listener, "user_id": user_id, "initializing": False, "init_error": None}
         except Exception as e:
             _trader_instance["initializing"] = False
