@@ -66,11 +66,22 @@ export default function TerminalPage() {
   }, [addLog]);
 
   // Poll server logs and merge into local log stream
-  const [lastLogId, setLastLogId] = useState(0);
+  // Skip first poll — don't replay old Supabase logs
+  const [lastLogId, setLastLogId] = useState(-1);
+  const isFirstPoll = useRef(true);
   useEffect(() => {
     const poll = async () => {
       try {
-        const data = await apiGet<LogsData>(`/api/v1/logs?limit=20`);
+        const data = await apiGet<LogsData>(`/api/v1/logs?limit=50`);
+        if (isFirstPoll.current) {
+          isFirstPoll.current = false;
+          if (data.logs.length > 0) {
+            setLastLogId(data.logs[data.logs.length - 1].id);
+          } else {
+            setLastLogId(0);
+          }
+          return;
+        }
         const newLogs = data.logs.filter((l) => l.id > lastLogId);
         if (newLogs.length > 0) {
           setLastLogId(newLogs[newLogs.length - 1].id);
@@ -114,7 +125,9 @@ export default function TerminalPage() {
   const handleClearLogs = async () => {
     try {
       await apiDelete("/api/v1/logs");
-      addLog("sys", "Logs cleared");
+      setLogs([]);
+      setLastLogId(-1);
+      isFirstPoll.current = true;
     } catch (e: any) {
       addLog("err", `Clear logs failed: ${e.message}`);
     }
@@ -145,6 +158,7 @@ export default function TerminalPage() {
 
   const isInitializing = traderStatus?.initializing ?? false;
   const isRunning = traderStatus?.running ?? false;
+  const initError = traderStatus?.error || null;
   const totalPnl = positions.reduce((sum, p) => sum + (p.pnl || 0), 0);
 
   return (
@@ -193,6 +207,13 @@ export default function TerminalPage() {
           </button>
         </div>
       </div>
+
+      {initError && !isRunning && !isInitializing && (
+        <div className="border border-error bg-error/10 p-unit-4 mb-unit-4 flex items-center gap-unit-2">
+          <span className="text-error font-code-snippet text-code-snippet shrink-0">ERROR:</span>
+          <span className="text-on-surface font-code-snippet text-code-snippet">{initError}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-gutter">
         <div className="border border-surface-variant p-unit-4 bg-background hover:border-primary-fixed-dim transition-colors group relative">
