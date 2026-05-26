@@ -19,6 +19,14 @@ export async function apiGet<T>(path: string): Promise<T> {
   return res.json();
 }
 
+export async function apiDelete(path: string): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+}
+
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
@@ -79,6 +87,8 @@ export interface ApiKeysData {
 
 export interface TraderStatus {
   running: boolean;
+  initializing?: boolean;
+  error?: string;
   symbol: string;
   leverage: number;
   equity: number;

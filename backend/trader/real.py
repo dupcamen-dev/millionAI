@@ -173,6 +173,10 @@ class RealTrader(BaseTrader):
 
     def on_entry(self, side, price, ts_str):
         super().on_entry(side, price, ts_str)
+        if self.equity <= 0:
+            self._log("BALANCE", f"Cannot trade: wallet is $0.00")
+            self.pos = 0
+            return
         try:
             bal = self.binance.get_balance()
             self.equity = float(bal) if bal else self.equity
@@ -203,7 +207,7 @@ class RealTrader(BaseTrader):
             if e.code == RATE_LIMIT:
                 time.sleep(5)
             # Try to re-select symbol if -2015 (key issue) or other perm errors
-            if self.auto_symbol and e.code in (-2015, -2010):
+            if self.auto_symbol and e.code == -2015:
                 self._auto_select_symbol()
         except Exception as e:
             self._log("ERROR", f"Entry failed: {e}")

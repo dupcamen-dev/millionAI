@@ -51,3 +51,6 @@ class SupabaseDB:
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         self.db.table("logs").insert(data).execute()
+
+    def delete_logs(self, user_id: str):
+        self.db.table("logs").delete().eq("user_id", user_id).execute()

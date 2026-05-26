@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { apiGet, apiPost, BalanceData, TraderStatus, TraderStartResult, LogEntry, LogsData } from "@/lib/api";
+import { apiGet, apiPost, apiDelete, BalanceData, TraderStatus, LogsData } from "@/lib/api";
 
 interface LocalLog {
   time: string;
@@ -48,11 +48,20 @@ export default function TerminalPage() {
       try {
         const s = await apiGet<TraderStatus>("/api/v1/trader/status");
         setTraderStatus(s);
+        if (s.initializing) {
+          setStarting(true);
+        } else if (s.running) {
+          setStarting(false);
+        }
+        if (s.error) {
+          addLog("err", `Init error: ${s.error}`);
+          setStarting(false);
+        }
       } catch {}
     };
     load();
     loadStatus();
-    const interval = setInterval(() => { load(); loadStatus(); }, 15000);
+    const interval = setInterval(() => { load(); loadStatus(); }, 5000);
     return () => clearInterval(interval);
   }, [addLog]);
 
@@ -81,18 +90,12 @@ export default function TerminalPage() {
     setStarting(true);
     addLog("sys", "Starting trader...");
     try {
-      const r = await apiPost<TraderStartResult>("/api/v1/trader/start");
-      addLog("ok", `Trader started: ${r.symbol} ${r.leverage}x balance=$${r.balance}`);
-      if (r.candidates && r.candidates.length > 0) {
-        r.candidates.forEach((c: any, i: number) => {
-          addLog("sys", `  #${i+1} ${c.symbol} @ $${c.price} vol=${c.volatility}%`);
-        });
-      }
-      setTraderStatus({ running: true, symbol: r.symbol, leverage: r.leverage, equity: r.balance, candles: 0, trades: 0, wins: 0 });
+      await apiPost("/api/v1/trader/start");
+      addLog("sys", "Initializing trader with backtest... Check logs for progress.");
     } catch (e: any) {
       addLog("err", `Start failed: ${e.message}`);
+      setStarting(false);
     }
-    setStarting(false);
   };
 
   const handleStop = async () => {
@@ -106,6 +109,15 @@ export default function TerminalPage() {
       addLog("err", `Stop failed: ${e.message}`);
     }
     setStopping(false);
+  };
+
+  const handleClearLogs = async () => {
+    try {
+      await apiDelete("/api/v1/logs");
+      addLog("sys", "Logs cleared");
+    } catch (e: any) {
+      addLog("err", `Clear logs failed: ${e.message}`);
+    }
   };
 
   const handleCommand = (e: React.FormEvent) => {
@@ -131,6 +143,8 @@ export default function TerminalPage() {
     setCommand("");
   };
 
+  const isInitializing = traderStatus?.initializing ?? false;
+  const isRunning = traderStatus?.running ?? false;
   const totalPnl = positions.reduce((sum, p) => sum + (p.pnl || 0), 0);
 
   return (
@@ -140,32 +154,37 @@ export default function TerminalPage() {
           <div>
             <h1 className="font-headline-lg text-headline-lg text-on-surface uppercase">TERMINAL</h1>
             <p className="font-code-snippet text-code-snippet text-outline mt-unit-1">
-              &gt; {traderStatus?.running ? `TRADING ${traderStatus.symbol} ${traderStatus.leverage}x` : "SYS.IDLE"}
+              &gt; {isRunning ? `TRADING ${traderStatus.symbol} ${traderStatus.leverage}x` : isInitializing ? "INITIALIZING..." : "SYS.IDLE"}
             </p>
           </div>
-          {traderStatus?.running && (
+          {isRunning && (
             <div className="font-label-caps text-label-caps text-primary-fixed-dim border border-primary-fixed-dim px-unit-2 py-unit-1 animate-pulse uppercase">
               LIVE
+            </div>
+          )}
+          {isInitializing && (
+            <div className="font-label-caps text-label-caps text-[#ffd5ae] border border-[#ffd5ae] px-unit-2 py-unit-1 animate-pulse uppercase">
+              BOOTING
             </div>
           )}
         </div>
         <div className="flex gap-unit-2">
           <button
             onClick={handleStart}
-            disabled={starting || traderStatus?.running}
+            disabled={starting || isRunning || isInitializing}
             className={`font-label-caps text-label-caps px-unit-4 py-unit-2 border transition-colors uppercase ${
-              traderStatus?.running
+              isRunning || isInitializing
                 ? "border-outline-variant text-outline cursor-not-allowed"
                 : "border-primary-fixed-dim text-primary-fixed-dim hover:bg-primary-fixed-dim hover:text-on-primary"
             }`}
           >
-            {starting ? "[ STARTING ]" : "[ START ]"}
+            {starting || isInitializing ? "[ STARTING ]" : "[ START ]"}
           </button>
           <button
             onClick={handleStop}
-            disabled={stopping || !traderStatus?.running}
+            disabled={stopping || (!isRunning && !isInitializing)}
             className={`font-label-caps text-label-caps px-unit-4 py-unit-2 border transition-colors uppercase ${
-              !traderStatus?.running
+              !isRunning && !isInitializing
                 ? "border-outline-variant text-outline cursor-not-allowed"
                 : "border-error text-error hover:bg-error hover:text-on-error"
             }`}
@@ -194,12 +213,14 @@ export default function TerminalPage() {
         <div className="border border-surface-variant p-unit-4 bg-background hover:border-primary-fixed-dim transition-colors group relative">
           <div className="absolute top-0 right-0 w-2 h-2 bg-primary-fixed-dim m-unit-1 opacity-50 group-hover:opacity-100 transition-opacity" />
           <div className="font-label-caps text-label-caps text-outline mb-unit-2 uppercase">Trader</div>
-          <div className="font-display text-display" style={{ fontSize: "1.4rem", color: traderStatus?.running ? "#28a745" : "#666" }}>
-            {traderStatus?.running ? "RUNNING" : "STOPPED"}
+          <div className="font-display text-display" style={{ fontSize: "1.4rem", color: isRunning ? "#28a745" : isInitializing ? "#ffd5ae" : "#666" }}>
+            {isRunning ? "RUNNING" : isInitializing ? "BOOTING" : "STOPPED"}
           </div>
           <div className="font-code-snippet text-code-snippet text-on-surface-variant mt-unit-2">
-            {traderStatus?.running
-              ? `${traderStatus.symbol} ${traderStatus.leverage}x | Candles: ${traderStatus.candles}`
+            {isRunning
+              ? `${traderStatus!.symbol} ${traderStatus!.leverage}x | Candles: ${traderStatus!.candles}`
+              : isInitializing
+              ? "Running backtest, please wait..."
               : "No active trader"}
           </div>
         </div>
@@ -245,6 +266,12 @@ export default function TerminalPage() {
       <div className="border border-surface-variant bg-background flex flex-col">
         <div className="p-unit-4 border-b border-surface-variant flex justify-between items-center bg-surface-container-low">
           <h2 className="font-label-caps text-label-caps text-on-surface uppercase">SYS.LOG_STREAM</h2>
+          <button
+            onClick={handleClearLogs}
+            className="font-label-caps text-label-caps text-outline hover:text-primary-fixed-dim uppercase border border-outline-variant px-unit-2 py-unit-1 hover:border-primary-fixed-dim hover:bg-primary-fixed-dim hover:text-on-primary transition-colors"
+          >
+            Clear
+          </button>
         </div>
         <div ref={logRef} className="h-64 overflow-y-auto p-unit-4 font-code-snippet text-code-snippet text-on-surface-variant flex flex-col gap-unit-1 bg-surface-container-lowest">
           {logs.map((log, i) => (

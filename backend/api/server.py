@@ -1,6 +1,7 @@
 """FastAPI server — REST API for Million Terminal frontend."""
 import json
 import os
+import queue
 import sys
 import time
 import threading
@@ -27,6 +28,7 @@ ACCESS_CODE = os.getenv("ACCESS_CODE", "1231")
 CONFIG_PATH = os.getenv("CONFIG_FILE", "") or os.path.join(os.path.dirname(__file__), "..", "best_config.json")
 
 _db = None
+_telegram_bot = None
 _trader_instance = {"trader": None, "thread": None, "listener": None, "user_id": None}
 
 def get_db():
@@ -103,6 +105,15 @@ def get_logs(level: str = "", search: str = "", limit: int = 100, offset: int = 
     query = query.order("created_at", desc=True).range(offset, offset + limit - 1)
     result = query.execute()
     return {"logs": result.data, "total": result.count}
+
+@app.delete("/api/v1/logs")
+def delete_logs(x_access_code: str = Header("")):
+    user_id = verify_access(x_access_code)
+    db = get_db()
+    if not db:
+        return {"deleted": 0}
+    db.delete_logs(user_id)
+    return {"deleted": True}
 
 # ── Assets / Screener ─────────────────────────────────────────────────
 @app.get("/api/v1/assets/screener")
@@ -186,6 +197,8 @@ def trader_start(x_access_code: str = Header("")):
     global _trader_instance
     user_id = verify_access(x_access_code)
 
+    if _trader_instance["initializing"]:
+        raise HTTPException(409, "Trader is still initializing, please wait.")
     if _trader_instance["trader"] is not None:
         raise HTTPException(409, "Trader already running. Stop first.")
 
@@ -196,45 +209,63 @@ def trader_start(x_access_code: str = Header("")):
     if not api_key:
         raise HTTPException(400, "No API keys configured. Set them in Settings first.")
 
-    from trader.real import RealTrader
-    from exchange.binance_ws import BinanceWSListener
-    from exchange.binance_rest import BinanceAPIError
-
     db = get_db()
+    _trader_instance["initializing"] = True
+    _trader_instance["init_error"] = None
 
-    try:
-        trader = RealTrader(
-            api_key, api_secret,
-            symbol="", leverage=1,
-            config_file=CONFIG_PATH if os.path.exists(CONFIG_PATH) else None,
-            db=db, telegram_queue=None,
-            auto_symbol=True,
-        )
-        trader.user_id = user_id
-        trader._init_exchange()
+    def _init_trader():
+        global _trader_instance, _telegram_bot
+        try:
+            from trader.real import RealTrader
+            from exchange.binance_ws import BinanceWSListener
+            from exchange.binance_rest import BinanceAPIError
+            from telegram.bot import TelegramBot
 
-        listener = BinanceWSListener(trader.on_candle)
-        thread = threading.Thread(target=listener.connect, args=(trader.symbol, "5m"), daemon=True)
-        thread.start()
+            # Start Telegram bot if token configured
+            msg_queue = None
+            telegram_token = ""
+            if db:
+                keys = db.get_api_keys(user_id)
+                if keys:
+                    telegram_token = keys.get("telegram_bot_token", "")
+                    telegram_chat_id = keys.get("telegram_chat_id", "")
+            if telegram_token:
+                msg_queue = queue.Queue()
+                _telegram_bot = TelegramBot(telegram_token, msg_queue)
+                t = threading.Thread(target=_telegram_bot.run, daemon=True)
+                t.start()
 
-        _trader_instance = {"trader": trader, "thread": thread, "listener": listener, "user_id": user_id}
+            trader = RealTrader(
+                api_key, api_secret,
+                symbol="", leverage=1,
+                config_file=CONFIG_PATH if os.path.exists(CONFIG_PATH) else None,
+                db=db, telegram_queue=msg_queue,
+                auto_symbol=True,
+            )
+            trader.user_id = user_id
+            trader._init_exchange()
 
-        return {
-            "status": "started",
-            "symbol": trader.symbol,
-            "leverage": trader.leverage,
-            "balance": round(trader.equity, 2),
-            "candidates": trader.last_screener_candidates,
-        }
-    except BinanceAPIError as e:
-        raise HTTPException(502, f"Binance error: {e.message}")
-    except Exception as e:
-        raise HTTPException(500, f"Start failed: {e}")
+            listener = BinanceWSListener(trader.on_candle)
+            thread = threading.Thread(target=listener.connect, args=(trader.symbol, "5m"), daemon=True)
+            thread.start()
+
+            _trader_instance = {"trader": trader, "thread": thread, "listener": listener, "user_id": user_id, "initializing": False, "init_error": None}
+        except Exception as e:
+            _trader_instance["initializing"] = False
+            _trader_instance["init_error"] = str(e)
+
+    threading.Thread(target=_init_trader, daemon=True).start()
+
+    return {"status": "starting", "message": "Initializing trader with backtest... This may take a few minutes."}
 
 @app.post("/api/v1/trader/stop")
 def trader_stop(x_access_code: str = Header("")):
     global _trader_instance
     user_id = verify_access(x_access_code)
+
+    if _trader_instance["initializing"]:
+        _trader_instance = {"trader": None, "thread": None, "listener": None, "user_id": None, "initializing": False, "init_error": None}
+        return {"status": "cancelled", "message": "Initialization cancelled"}
 
     if _trader_instance["trader"] is None:
         raise HTTPException(409, "No trader running.")
@@ -265,12 +296,16 @@ def trader_stop(x_access_code: str = Header("")):
     except Exception:
         pass
 
+    global _telegram_bot
     trader.running = False
     listener.stop()
+    if _telegram_bot:
+        _telegram_bot.stop()
+        _telegram_bot = None
     save_path = CONFIG_PATH
     trader.save_config(save_path)
 
-    _trader_instance = {"trader": None, "thread": None, "listener": None, "user_id": None}
+    _trader_instance = {"trader": None, "thread": None, "listener": None, "user_id": None, "initializing": False, "init_error": None}
 
     return {"status": "stopped", "trades": trader.trades, "pnl_pct": round(trader.total_pnl * 100, 2)}
 
@@ -279,8 +314,12 @@ def trader_status(x_access_code: str = Header("")):
     user_id = verify_access(x_access_code)
     inst = _trader_instance
 
+    if inst["initializing"]:
+        return {"running": False, "initializing": True, "symbol": "", "leverage": 1, "equity": 0, "candles": 0, "trades": 0}
+    if inst["init_error"]:
+        return {"running": False, "initializing": False, "error": inst["init_error"], "symbol": "", "leverage": 1, "equity": 0, "candles": 0, "trades": 0}
     if inst["trader"] is None:
-        return {"running": False, "symbol": "", "leverage": 1, "equity": 0, "candles": 0, "trades": 0}
+        return {"running": False, "initializing": False, "symbol": "", "leverage": 1, "equity": 0, "candles": 0, "trades": 0}
 
     t = inst["trader"]
     return {
