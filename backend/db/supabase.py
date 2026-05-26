@@ -40,7 +40,6 @@ class SupabaseDB:
     def write_equity(self, user_id: str, equity: float, balance: float, symbol: str = ""):
         data = {
             "user_id": user_id, "equity": equity, "balance": balance,
-            "symbol": symbol or "",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         self.db.table("equity_curve").insert(data).execute()

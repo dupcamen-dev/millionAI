@@ -270,7 +270,7 @@ class RealTrader(BaseTrader):
                     quantity=qty, leverage=self.leverage,
                     pnl=pnl_usd, pnl_pct=pnl_pct, close_reason=reason,
                 )
-                self.db.write_equity(self.user_id, self.equity, self.equity, self.symbol)
+                self.db.write_equity(self.user_id, self.equity, self.equity)
             self._tg(f"[REAL] CLOSE {self.symbol} {reason} PnL={pnl_pct*100:.2f}%")
         except BinanceAPIError as e:
             msg = ERR_MESSAGES.get(e.code, f"Close error [{e.code}]: {e.message}")
@@ -302,4 +302,4 @@ class RealTrader(BaseTrader):
 
     def sync_db_every_candle(self):
         if self.db and self.user_id:
-            self.db.write_equity(self.user_id, self.equity, self.equity, self.symbol)
+            self.db.write_equity(self.user_id, self.equity, self.equity)
