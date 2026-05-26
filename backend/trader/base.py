@@ -172,7 +172,7 @@ class BaseTrader:
             else:
                 if use_c:
                     self._c_snn.decay_traces()
-                else:
+                    self._c_snn.hebbian_idle(spikes)
                     for n in self.neurons:
                         self.rstdp.decay_trace(n.eligibility)
         else:

@@ -6,9 +6,9 @@ import platform
 import numpy as np
 
 _LIB = None
-BUY_N = 8
-SELL_N = 8
-TOTAL_N = 16
+BUY_N = 16
+SELL_N = 16
+TOTAL_N = BUY_N + SELL_N
 NUCLEUS_SIZE = 64
 SENSORY = 8
 
@@ -42,6 +42,8 @@ def _setup():
     lib.snn_accumulate_live.restype = None
     lib.snn_decay_all.argtypes = []
     lib.snn_decay_all.restype = None
+    lib.snn_hebbian_idle.argtypes = [ctypes.POINTER(ctypes.c_float), ctypes.c_float]
+    lib.snn_hebbian_idle.restype = None
     lib.snn_micro_reward_all.argtypes = [ctypes.c_float, ctypes.c_float]
     lib.snn_micro_reward_all.restype = None
     lib.snn_commit_all.argtypes = [ctypes.c_float, ctypes.c_int]
@@ -91,6 +93,10 @@ class NativeSNN:
     def decay_traces(self):
         self.lib.snn_decay_all()
 
+    def hebbian_idle(self, spikes, lr_hebb=0.001):
+        sp = np.asarray(spikes[:SENSORY], dtype=np.float32)
+        self.lib.snn_hebbian_idle(sp.ctypes.data_as(ctypes.POINTER(ctypes.c_float)), ctypes.c_float(lr_hebb))
+
     def micro_reward(self, prev_pnl, curr_pnl):
         self.lib.snn_micro_reward_all(ctypes.c_float(prev_pnl), ctypes.c_float(curr_pnl))
 
@@ -113,7 +119,7 @@ class NativeSNN:
 
     def save_state(self):
         """Export full neuron + RSTDP state as dict (for persistence to DB)."""
-        buf = (ctypes.c_float * 2200)()
+        buf = (ctypes.c_float * 4400)()
         n = self.lib.snn_save_state(buf)
         arr = np.array(buf[:n], dtype=np.float32)
         weights_2d = []
@@ -143,7 +149,7 @@ class NativeSNN:
 
     def load_state(self, saved, load_eligibility=True, load_membrane=True):
         """Restore full neuron + RSTDP state from dict (saved via save_state)."""
-        buf = (ctypes.c_float * 2200)()
+        buf = (ctypes.c_float * 4400)()
         pos = 0
         for i in range(TOTAL_N):
             w = saved["weights"][i][:NUCLEUS_SIZE]

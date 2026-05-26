@@ -3,8 +3,8 @@ import numpy as np
 
 ARCHIVE_N = 64
 SENSORY = 8
-BUY_N = 8
-SELL_N = 8
+BUY_N = 16
+SELL_N = 16
 TOTAL_N = BUY_N + SELL_N
 
 _UNFOLD_CACHE = {}

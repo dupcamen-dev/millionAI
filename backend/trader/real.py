@@ -138,13 +138,13 @@ class RealTrader(BaseTrader):
                 t0 = time.time()
                 try:
                     self._log("SYS", f"  Fetching klines for {a['symbol']}...")
-                    raw = self.binance.get_klines(a["symbol"], "5m", 500)
+                    raw = self.binance.get_klines(a["symbol"], "5m", 2000)
                     self._log("SYS", f"  Got {len(raw) if raw else 0} candles in {time.time()-t0:.1f}s")
                 except Exception as e:
                     self._log("WARN", f"  skip — kline fetch failed: {e}")
                     time.sleep(1)
                     continue
-                if not raw or len(raw) < 100:
+                if not raw or len(raw) < 400:
                     self._log("WARN", f"  skip — insufficient data ({len(raw) if raw else 0} candles)")
                     continue
                 self._log("SYS", f"  Building data array...")

@@ -16,8 +16,8 @@
 
 /* ==================== Architecture constants ==================== */
 #define NUCLEUS_SIZE   64
-#define BUY_N          8
-#define SELL_N         8
+#define BUY_N          16
+#define SELL_N         16
 #define TOTAL_N        (BUY_N + SELL_N)
 #define UNFOLD_SIZE    (NUCLEUS_SIZE * 4)
 #define SENSORY        8
@@ -214,7 +214,7 @@ static void rstpd_commit_one(Neuron* n, float pnl_pct, int side) {
     g_rstdp.trades++;
     g_rstdp.trades_total++;
     if (net > 0) g_rstdp.wins++;
-    g_rstdp.lr = g_rstdp.lr_0 / (1.0f + 0.01f * (float)g_rstdp.trades_total);
+    g_rstdp.lr = g_rstdp.lr_0 / (1.0f + 0.005f * (float)g_rstdp.trades_total);
 }
 
 /* ==================== Full Backtest in C ==================== */
@@ -342,6 +342,25 @@ EXPORT void snn_backtest(
                 } else {
                     for (int i = 0; i < TOTAL_N; i++) {
                         rstpd_decay_one(&g_neurons[i]);
+                    }
+                    /* Hebbian idle: reinforce firing patterns even without position */
+                    for (int i = 0; i < BUY_N; i++) {
+                        if (g_neurons[i].output > 0.0f) {
+                            for (int j = 0; j < SENSORY; j++)
+                                g_neurons[i].nucleus[j] += 0.001f * spikes[j] * g_neurons[i].output;
+                        }
+                    }
+                    for (int i = 0; i < SELL_N; i++) {
+                        int idx = BUY_N + i;
+                        if (g_neurons[idx].output > 0.0f) {
+                            for (int j = 0; j < SENSORY; j++)
+                                g_neurons[idx].nucleus[j] += 0.001f * neg_spikes[j] * g_neurons[idx].output;
+                        }
+                    }
+                    /* L2 weight decay */
+                    for (int i = 0; i < TOTAL_N; i++) {
+                        for (int j = 0; j < NUCLEUS_SIZE; j++)
+                            g_neurons[i].nucleus[j] *= 0.99999f;
                     }
                 }
             } else {
@@ -478,6 +497,30 @@ EXPORT void snn_accumulate_live(const float* spikes) {
 
 EXPORT void snn_decay_all(void) {
     for (int i = 0; i < TOTAL_N; i++) rstpd_decay_one(&g_neurons[i]);
+}
+
+EXPORT void snn_hebbian_idle(const float* spikes, float lr_hebb) {
+    /* Hebbian reinforcement when pos=0: strengthen patterns that activate neurons */
+    float neg_spikes[SENSORY];
+    for (int i = 0; i < SENSORY; i++) neg_spikes[i] = -spikes[i];
+    for (int i = 0; i < BUY_N; i++) {
+        if (g_neurons[i].output > 0.0f) {
+            for (int j = 0; j < SENSORY; j++)
+                g_neurons[i].nucleus[j] += lr_hebb * spikes[j] * g_neurons[i].output;
+        }
+    }
+    for (int i = 0; i < SELL_N; i++) {
+        int idx = BUY_N + i;
+        if (g_neurons[idx].output > 0.0f) {
+            for (int j = 0; j < SENSORY; j++)
+                g_neurons[idx].nucleus[j] += lr_hebb * neg_spikes[j] * g_neurons[idx].output;
+        }
+    }
+    /* L2 weight decay to prevent divergence */
+    for (int i = 0; i < TOTAL_N; i++) {
+        for (int j = 0; j < NUCLEUS_SIZE; j++)
+            g_neurons[i].nucleus[j] *= 0.99999f;
+    }
 }
 
 EXPORT void snn_micro_reward_all(float prev_pnl, float curr_pnl) {
