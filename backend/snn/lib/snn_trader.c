@@ -137,11 +137,18 @@ static int neuron_forward(Neuron* n, const float* input_vec, int input_size) {
         return 0;
     }
 
-    float unfolded[UNFOLD_SIZE];
+    float unfolded1[UNFOLD_SIZE];
+    float compressed1[NUCLEUS_SIZE];
+    float unfolded2[UNFOLD_SIZE];
     float state[NUCLEUS_SIZE];
 
-    archive_unfold(n->nucleus, NUCLEUS_SIZE, unfolded, UNFOLD_SIZE, 1);
-    archive_compress(unfolded, UNFOLD_SIZE, state, NUCLEUS_SIZE);
+    /* Level 1: nucleus[64] -> unfolded[256] -> compress -> features[64] */
+    archive_unfold(n->nucleus, NUCLEUS_SIZE, unfolded1, UNFOLD_SIZE, 1);
+    archive_compress(unfolded1, UNFOLD_SIZE, compressed1, NUCLEUS_SIZE);
+
+    /* Level 2: features[64] -> unfolded[256] -> compress -> state[64] */
+    archive_unfold(compressed1, NUCLEUS_SIZE, unfolded2, UNFOLD_SIZE, 2);
+    archive_compress(unfolded2, UNFOLD_SIZE, state, NUCLEUS_SIZE);
 
     float delta = 0.0f;
     int limit = (input_size < SENSORY) ? input_size : SENSORY;

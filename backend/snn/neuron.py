@@ -25,8 +25,12 @@ class TradingNeuron:
             self.output = 0.0
             return
         SENSORY = len(input_vec)
-        unfolded = archive_unfold(self.nucleus, 1)
-        state = archive_compress(unfolded, ARCHIVE_N)
+        # Level 1: nucleus[64] -> unfold -> compress -> features[64]
+        unfolded1 = archive_unfold(self.nucleus, 1)
+        features = archive_compress(unfolded1, ARCHIVE_N)
+        # Level 2: features[64] -> unfold -> compress -> state[64]
+        unfolded2 = archive_unfold(features, 2)
+        state = archive_compress(unfolded2, ARCHIVE_N)
         delta = np.dot(input_vec[:SENSORY], state[:SENSORY]) / float(SENSORY) + self.bias
         self.potential += delta
         if self.potential >= self.threshold:
