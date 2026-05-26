@@ -17,13 +17,9 @@ ERR_MESSAGES = {
 }
 
 def select_leverage(volatility_pct: float) -> int:
-    if volatility_pct < 0.5:
-        return 5
-    elif volatility_pct < 1.0:
-        return 5
+    if volatility_pct < 1.0:
+        return 2
     elif volatility_pct < 2.0:
-        return 3
-    elif volatility_pct < 4.0:
         return 2
     else:
         return 1
@@ -149,7 +145,7 @@ class RealTrader(BaseTrader):
 
             if best_result and best_result["trades"] > 0:
                 risk = best_result["risk_score"]
-                self.leverage = max(1, min(5, round(1 + risk * 2)))
+                self.leverage = max(1, min(2, round(1 + risk * 2)))
                 self.binance.set_leverage(self.symbol, self.leverage)
                 if best_result.get("weights"):
                     from snn.neuron import TradingNeuron
@@ -157,7 +153,7 @@ class RealTrader(BaseTrader):
                     self._log("SYS", f"Loaded trained weights from backtest ({len(self.neurons)} neurons)")
                 self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (risk={risk:.2f} | {best_result['trades']}t)")
             else:
-                self.leverage = 5
+                self.leverage = 2
                 self.binance.set_leverage(self.symbol, self.leverage)
                 self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (fallback)")
 
