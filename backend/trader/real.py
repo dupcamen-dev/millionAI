@@ -17,12 +17,7 @@ ERR_MESSAGES = {
 }
 
 def select_leverage(volatility_pct: float) -> int:
-    if volatility_pct < 1.0:
-        return 2
-    elif volatility_pct < 2.0:
-        return 2
-    else:
-        return 1
+    return 1
 
 class RealTrader(BaseTrader):
     def __init__(self, api_key, api_secret, symbol="SOLUSDT", leverage=1,
@@ -142,7 +137,7 @@ class RealTrader(BaseTrader):
                 init_weights = warm_weights.get(a["symbol"], {}).get("weights")
                 if init_weights:
                     self._log("SYS", f"  Warm-starting with saved weights")
-                r = quick_backtest(data, init_weights=init_weights)
+                r = quick_backtest(data, init_weights=init_weights, leverage=1)
                 self._log("SYS", f"  Backtest took {time.time()-t1:.1f}s")
                 risk = r["risk_score"]
                 self._log("SYS", f"  {r['trades']}t WR:{r['winrate']*100:.0f}% PnL:{r['total_pnl']*100:.1f}% risk:{risk:.2f}")
@@ -161,7 +156,7 @@ class RealTrader(BaseTrader):
             if best_result and best_result["trades"] > 0:
                 risk = best_result["risk_score"]
                 self.last_backtest_risk_score = risk
-                self.leverage = max(1, min(2, round(1 + risk * 2)))
+                self.leverage = 1
                 self.binance.set_leverage(self.symbol, self.leverage)
                 if best_result.get("weights"):
                     from snn.neuron import TradingNeuron
@@ -176,7 +171,7 @@ class RealTrader(BaseTrader):
                             self._log("WARN", f"Failed to save weights: {ex}")
                 self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (risk={risk:.2f} | {best_result['trades']}t)")
             else:
-                self.leverage = 2
+                self.leverage = 1
                 self.binance.set_leverage(self.symbol, self.leverage)
                 self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (fallback)")
 

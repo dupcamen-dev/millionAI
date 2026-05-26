@@ -10,7 +10,7 @@ from snn.neuron import TradingNeuron
 from snn.rstpd import RSTDPEngine
 
 
-def quick_backtest(data, lr=0.01, tau=24.0, sl=0.05, tp=0.12, fee=0.002, use_micro=True, init_weights=None):
+def quick_backtest(data, lr=0.01, tau=24.0, sl=0.05, tp=0.12, fee=0.002, use_micro=True, init_weights=None, leverage=1):
     if init_weights:
         neurons = [TradingNeuron(nucleus=np.array(w, dtype=np.float32)) for w in init_weights]
     else:
@@ -51,20 +51,21 @@ def quick_backtest(data, lr=0.01, tau=24.0, sl=0.05, tp=0.12, fee=0.002, use_mic
             else:
                 pnl_raw = (cl - entry_price) / entry_price
                 curr = pnl_raw if pos == 1 else -pnl_raw
+                curr_levered = curr * leverage
                 for i, n in enumerate(neurons):
                     inp = spikes if i < BUY_N else neg
                     rstdp.accumulate(n.eligibility, inp, n.output)
                 if use_micro and has_prev:
                     for n in neurons:
-                        rstdp.micro_reward(n.nucleus, n.eligibility, prev_pnl, curr)
-                prev_pnl = curr
+                        rstdp.micro_reward(n.nucleus, n.eligibility, prev_pnl, curr_levered)
+                prev_pnl = curr_levered
                 has_prev = True
                 for n in neurons:
                     rstdp.decay_trace(n.eligibility)
                 close = 0
-                if sl > 0 and curr <= -sl:
+                if sl > 0 and curr_levered <= -sl:
                     close = 1
-                elif tp > 0 and curr >= tp:
+                elif tp > 0 and curr_levered >= tp:
                     close = 1
                 elif (pos == 1 and action == -1) or (pos == -1 and action == 1):
                     close = 1
@@ -75,9 +76,9 @@ def quick_backtest(data, lr=0.01, tau=24.0, sl=0.05, tp=0.12, fee=0.002, use_mic
                     pos = 0
                     has_prev = False
                     trades += 1
-                    pnl_sum += curr
-                    phase_pnls.append(curr)
-                    if curr > 0:
+                    pnl_sum += curr_levered
+                    phase_pnls.append(curr_levered)
+                    if curr_levered > 0:
                         wins += 1
         if phase == "test":
             pnls = phase_pnls
