@@ -1,4 +1,4 @@
-"""FastAPI server — REST API for Million Terminal frontend."""
+"""FastAPI server — REST API for Million Terminal frontend — multi-user support."""
 import json
 import os
 import queue
@@ -18,19 +18,21 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv()
 
 # ── App ──────────────────────────────────────────────────────────────
-app = FastAPI(title="Million Terminal API", version="1.0.0")
+app = FastAPI(title="Million Terminal API", version="2.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# ── Helpers ───────────────────────────────────────────────────────────
+# ── Config ───────────────────────────────────────────────────────────
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 ACCESS_CODE = os.getenv("ACCESS_CODE", "1231")
 CONFIG_PATH = os.getenv("CONFIG_FILE", "") or os.path.join(os.path.dirname(__file__), "..", "best_config.json")
+MAX_TRADERS = 3
 
+# ── State ────────────────────────────────────────────────────────────
 _db = None
-_telegram_bot = None
 _start_lock = threading.Lock()
-_trader_instance = {"trader": None, "thread": None, "listener": None, "user_id": None, "initializing": False, "init_error": None}
+_trader_instances = {}  # {user_id: {"trader", "thread", "listener", "telegram_bot", "user_id", "initializing", "init_error"}}
+_balance_caches = {}    # {user_id: {"equity", "positions", "ts"}}
 
 def get_db():
     global _db
@@ -61,6 +63,9 @@ def get_user_keys(user_id: str):
         return None, None
     return keys.get("api_key"), keys.get("api_secret")
 
+def _get_instance(user_id: str):
+    return _trader_instances.get(user_id)
+
 # ── Models ────────────────────────────────────────────────────────────
 class ApiKeysPayload(BaseModel):
     api_key: str
@@ -78,17 +83,14 @@ def auth_verify(x_access_code: str = Header("")):
     return {"valid": True, "user_id": user_id}
 
 # ── Balance / Positions ───────────────────────────────────────────────
-_balance_cache = {"equity": 0.0, "positions": [], "ts": 0.0}
-
 @app.get("/api/v1/balance")
 def get_balance(x_access_code: str = Header("")):
-    global _balance_cache
     user_id = verify_access(x_access_code)
     now = time.time()
 
-    # If trader is running, use its live equity but still fetch positions from Binance
-    if _trader_instance["trader"] is not None and not _trader_instance["initializing"]:
-        t = _trader_instance["trader"]
+    inst = _get_instance(user_id)
+    if inst and inst["trader"] is not None and not inst["initializing"]:
+        t = inst["trader"]
         equity = round(t.equity, 2)
         positions = []
         try:
@@ -112,9 +114,9 @@ def get_balance(x_access_code: str = Header("")):
             pass
         return {"equity": equity, "balance": equity, "positions": positions}
 
-    # Return cached balance if fresh (< 30s)
-    if now - _balance_cache["ts"] < 30 and _balance_cache["ts"] > 0:
-        return {"equity": _balance_cache["equity"], "balance": _balance_cache["equity"], "positions": _balance_cache["positions"]}
+    cache = _balance_caches.get(user_id, {"equity": 0.0, "positions": [], "ts": 0.0})
+    if now - cache["ts"] < 30 and cache["ts"] > 0:
+        return {"equity": cache["equity"], "balance": cache["equity"], "positions": cache["positions"]}
 
     api_key, api_secret = get_user_keys(user_id)
     if not api_key:
@@ -126,9 +128,9 @@ def get_balance(x_access_code: str = Header("")):
             api = BinanceFuturesAPI(api_key, api_secret)
             bal = api.get_balance()
             equity = float(bal) if bal else 0.0
+            positions = []
             try:
                 raw_positions = api.get_positions()
-                positions = []
                 for p in raw_positions:
                     amt = float(p.get("positionAmt", 0))
                     positions.append({
@@ -140,13 +142,13 @@ def get_balance(x_access_code: str = Header("")):
                         "pnl": float(p.get("unRealizedProfit", 0)),
                     })
             except Exception:
-                positions = []
-            _balance_cache = {"equity": equity, "positions": positions, "ts": now}
+                pass
+            _balance_caches[user_id] = {"equity": equity, "positions": positions, "ts": now}
             return {"equity": equity, "balance": equity, "positions": positions}
         except Exception:
             pass
 
-    return {"equity": _balance_cache["equity"], "balance": _balance_cache["equity"], "positions": _balance_cache["positions"]}
+    return {"equity": cache.get("equity", 0), "balance": cache.get("equity", 0), "positions": cache.get("positions", [])}
 
 # ── Logs ──────────────────────────────────────────────────────────────
 @app.get("/api/v1/logs")
@@ -251,38 +253,42 @@ def save_settings_keys(payload: ApiKeysPayload, x_access_code: str = Header(""))
     )
     return {"saved": True}
 
-# ── Trader Control ────────────────────────────────────────────────────
+# ── Trader Control (Multi-user) ───────────────────────────────────────
 @app.post("/api/v1/trader/start")
 def trader_start(x_access_code: str = Header("")):
-    global _trader_instance, _start_lock
     user_id = verify_access(x_access_code)
 
     with _start_lock:
-        if _trader_instance["initializing"]:
-            raise HTTPException(409, "Trader is still initializing, please wait.")
-        if _trader_instance["trader"] is not None:
-            raise HTTPException(409, "Trader already running. Stop first.")
-        _trader_instance["initializing"] = True
-        _trader_instance["init_error"] = None
+        if len(_trader_instances) >= MAX_TRADERS:
+            raise HTTPException(429, f"Maximum {MAX_TRADERS} concurrent traders reached. Try again later.")
+        if user_id in _trader_instances:
+            inst = _trader_instances[user_id]
+            if inst["initializing"]:
+                raise HTTPException(409, "Your trader is still initializing, please wait.")
+            if inst["trader"] is not None:
+                raise HTTPException(409, "You already have a running trader. Stop it first.")
+            del _trader_instances[user_id]
+
+        _trader_instances[user_id] = {"trader": None, "thread": None, "listener": None, "telegram_bot": None, "user_id": user_id, "initializing": True, "init_error": None}
 
     api_key, api_secret = get_user_keys(user_id)
     if not api_key or not api_secret:
         api_key = os.getenv("API_KEY", "")
         api_secret = os.getenv("API_SECRET", "")
     if not api_key:
+        _trader_instances[user_id]["initializing"] = False
+        _trader_instances[user_id]["init_error"] = "No API keys configured. Set them in Settings first."
         raise HTTPException(400, "No API keys configured. Set them in Settings first.")
 
     db = get_db()
 
     def _init_trader():
-        global _trader_instance, _telegram_bot
         try:
             from trader.real import RealTrader
             from exchange.binance_ws import BinanceWSListener
             from exchange.binance_rest import BinanceAPIError
             from telegram.bot import TelegramBot
 
-            # Start Telegram bot if token configured
             msg_queue = None
             telegram_token = ""
             if db:
@@ -290,10 +296,11 @@ def trader_start(x_access_code: str = Header("")):
                 if keys:
                     telegram_token = keys.get("telegram_bot_token", "")
                     telegram_chat_id = keys.get("telegram_chat_id", "")
+            telegram_bot = None
             if telegram_token:
                 msg_queue = queue.Queue()
-                _telegram_bot = TelegramBot(telegram_token, msg_queue, trader_ref=lambda: _trader_instance.get("trader"))
-                t = threading.Thread(target=_telegram_bot.run, daemon=True)
+                telegram_bot = TelegramBot(telegram_token, msg_queue, trader_ref=lambda: _trader_instances.get(user_id, {}).get("trader"))
+                t = threading.Thread(target=telegram_bot.run, daemon=True)
                 t.start()
 
             trader = RealTrader(
@@ -310,10 +317,15 @@ def trader_start(x_access_code: str = Header("")):
             thread = threading.Thread(target=listener.connect, args=(trader.symbol, "5m"), daemon=True)
             thread.start()
 
-            _trader_instance = {"trader": trader, "thread": thread, "listener": listener, "user_id": user_id, "initializing": False, "init_error": None}
+            _trader_instances[user_id] = {
+                "trader": trader, "thread": thread, "listener": listener,
+                "telegram_bot": telegram_bot, "user_id": user_id,
+                "initializing": False, "init_error": None,
+            }
         except Exception as e:
-            _trader_instance["initializing"] = False
-            _trader_instance["init_error"] = str(e)
+            if user_id in _trader_instances:
+                _trader_instances[user_id]["initializing"] = False
+                _trader_instances[user_id]["init_error"] = str(e)
 
     threading.Thread(target=_init_trader, daemon=True).start()
 
@@ -321,32 +333,31 @@ def trader_start(x_access_code: str = Header("")):
 
 @app.post("/api/v1/trader/stop")
 def trader_stop(x_access_code: str = Header("")):
-    global _trader_instance
     user_id = verify_access(x_access_code)
 
-    if _trader_instance["initializing"]:
-        _trader_instance = {"trader": None, "thread": None, "listener": None, "user_id": None, "initializing": False, "init_error": None}
-        return {"status": "cancelled", "message": "Initialization cancelled"}
+    inst = _get_instance(user_id)
 
-    if _trader_instance["trader"] is None:
+    if inst is None:
         raise HTTPException(409, "No trader running.")
 
-    # Only owner can stop
-    if _trader_instance["user_id"] != user_id:
-        raise HTTPException(403, "Not your trader session")
+    if inst["initializing"]:
+        _trader_instances.pop(user_id, None)
+        return {"status": "cancelled", "message": "Initialization cancelled"}
 
-    trader = _trader_instance["trader"]
-    listener = _trader_instance["listener"]
+    if inst["trader"] is None:
+        _trader_instances.pop(user_id, None)
+        raise HTTPException(409, "No trader running.")
+
+    trader = inst["trader"]
+    listener = inst["listener"]
+    telegram_bot = inst.get("telegram_bot")
 
     try:
-        # Close all open positions via Binance
         from exchange.binance_rest import BinanceAPIError
         try:
             positions = trader.binance.get_position(trader.symbol)
             pos_qty = abs(float(positions.get("positionAmt", 0)))
             if pos_qty > 0:
-                side = positions.get("positionSide", "")
-                close_side = "SELL" if side == "LONG" or (not side and True) else "BUY"
                 if float(positions.get("positionAmt", 0)) > 0:
                     close_side = "SELL"
                 else:
@@ -357,41 +368,39 @@ def trader_stop(x_access_code: str = Header("")):
     except Exception:
         pass
 
-    global _telegram_bot
     trader.running = False
     listener.stop()
-    if _telegram_bot:
-        _telegram_bot.stop()
-        _telegram_bot = None
-    save_path = CONFIG_PATH
-    trader.save_config(save_path)
+    if telegram_bot:
+        telegram_bot.stop()
+    trader.save_config(CONFIG_PATH)
 
-    # Save learned weights per symbol to Supabase for warm start
+    db = get_db()
     if db and user_id and hasattr(trader, 'neurons') and trader.neurons:
         try:
             weights = [n.nucleus.tolist() for n in trader.neurons]
-            risk_score = 0.0
-            if hasattr(trader, 'last_backtest_risk_score'):
-                risk_score = trader.last_backtest_risk_score
+            risk_score = getattr(trader, 'last_backtest_risk_score', 0.0)
             db.save_weights(user_id, trader.symbol, weights, trader.leverage, risk_score)
         except Exception as e:
             print(f"[Server] Failed to save weights: {e}")
 
-    _trader_instance = {"trader": None, "thread": None, "listener": None, "user_id": None, "initializing": False, "init_error": None}
+    _trader_instances.pop(user_id, None)
 
     return {"status": "stopped", "trades": trader.trades, "pnl_pct": round(trader.total_pnl * 100, 2)}
 
 @app.get("/api/v1/trader/status")
 def trader_status(x_access_code: str = Header("")):
     user_id = verify_access(x_access_code)
-    inst = _trader_instance
+    inst = _get_instance(user_id)
+
+    if inst is None:
+        return {"running": False, "symbol": "", "leverage": 1, "equity": 0, "candles": 0, "trades": 0, "wins": 0, "position": "FLAT", "unrealized_pnl_pct": 0}
 
     if inst["initializing"]:
-        return {"running": False, "initializing": True, "symbol": "", "leverage": 1, "equity": 0, "candles": 0, "trades": 0}
+        return {"running": False, "initializing": True, "symbol": "", "leverage": 1, "equity": 0, "candles": 0, "trades": 0, "wins": 0, "position": "FLAT", "unrealized_pnl_pct": 0}
     if inst["init_error"]:
-        return {"running": False, "initializing": False, "error": inst["init_error"], "symbol": "", "leverage": 1, "equity": 0, "candles": 0, "trades": 0}
+        return {"running": False, "initializing": False, "error": inst["init_error"], "symbol": "", "leverage": 1, "equity": 0, "candles": 0, "trades": 0, "wins": 0, "position": "FLAT", "unrealized_pnl_pct": 0}
     if inst["trader"] is None:
-        return {"running": False, "initializing": False, "symbol": "", "leverage": 1, "equity": 0, "candles": 0, "trades": 0}
+        return {"running": False, "symbol": "", "leverage": 1, "equity": 0, "candles": 0, "trades": 0, "wins": 0, "position": "FLAT", "unrealized_pnl_pct": 0}
 
     t = inst["trader"]
     pos = getattr(t, 'pos', 0)
@@ -415,7 +424,7 @@ def trader_status(x_access_code: str = Header("")):
 # ── Health ────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():
-    return {"status": "ok", "time": time.time()}
+    return {"status": "ok", "time": time.time(), "active_traders": len(_trader_instances), "max_traders": MAX_TRADERS}
 
 # ── Main ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
