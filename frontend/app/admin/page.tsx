@@ -67,17 +67,24 @@ export default function TerminalPage() {
   }, [addLog]);
 
   // Poll server logs and merge into local log stream
-  // lastLogId = -1 means "skip display, just record current max id"
+  // On first load (lastLogId === -1), load recent logs from server
   const [lastLogId, setLastLogId] = useState(-1);
   useEffect(() => {
     const poll = async () => {
       try {
-        const data = await apiGet<LogsData>(`/api/v1/logs?limit=50&since_id=${lastLogId > 0 ? lastLogId : 0}`);
-        const maxId = data.logs.length > 0 ? Math.max(...data.logs.map((l) => l.id)) : 0;
         if (lastLogId === -1) {
+          const data = await apiGet<LogsData>(`/api/v1/logs?limit=50`);
+          const maxId = data.logs.length > 0 ? Math.max(...data.logs.map((l) => l.id)) : 0;
           setLastLogId(maxId || 0);
+          data.logs
+            .sort((a, b) => a.id - b.id)
+            .forEach((l) => {
+              const type = l.level === "ERROR" || l.level === "BALANCE" ? "err" : "ok";
+              addLog(type, l.message);
+            });
           return;
         }
+        const data = await apiGet<LogsData>(`/api/v1/logs?limit=50&since_id=${lastLogId}`);
         const newLogs = data.logs
           .filter((l) => l.id > lastLogId)
           .sort((a, b) => a.id - b.id);
@@ -157,6 +164,7 @@ export default function TerminalPage() {
   const isRunning = traderStatus?.running ?? false;
   const initError = traderStatus?.error || null;
   const totalPnl = positions.reduce((sum, p) => sum + (p.pnl || 0), 0);
+  const unrealizedPnl = traderStatus?.unrealized_pnl_pct ?? null;
 
   return (
     <>
@@ -165,7 +173,7 @@ export default function TerminalPage() {
           <div>
             <h1 className="font-headline-lg text-headline-lg text-on-surface uppercase">TERMINAL</h1>
             <p className="font-code-snippet text-code-snippet text-outline mt-unit-1">
-              &gt; {isRunning ? `TRADING ${traderStatus.symbol} ${traderStatus.leverage}x` : isInitializing ? "INITIALIZING..." : "SYS.IDLE"}
+              &gt; {isRunning ? `TRADING ${traderStatus.symbol} ${traderStatus.leverage}x ${traderStatus.position || "FLAT"}${unrealizedPnl !== null ? ` ${unrealizedPnl > 0 ? '+' : ''}${unrealizedPnl}%` : ''}` : isInitializing ? "INITIALIZING..." : "SYS.IDLE"}
             </p>
           </div>
           {isRunning && (
@@ -226,7 +234,9 @@ export default function TerminalPage() {
         <div className="border border-surface-variant p-unit-4 bg-background hover:border-primary-fixed-dim transition-colors group relative">
           <div className="absolute top-0 right-0 w-2 h-2 bg-primary-fixed-dim m-unit-1 opacity-50 group-hover:opacity-100 transition-opacity" />
           <div className="font-label-caps text-label-caps text-outline mb-unit-2 uppercase">Unrealized PnL</div>
-          <div className="font-display text-display text-primary-fixed-dim">${totalPnl.toFixed(2)}</div>
+          <div className={`font-display text-display ${unrealizedPnl !== null ? (unrealizedPnl > 0 ? "text-green-400" : unrealizedPnl < 0 ? "text-error" : "text-primary-fixed-dim") : "text-primary-fixed-dim"}`}>
+            {unrealizedPnl !== null ? `${unrealizedPnl > 0 ? '+' : ''}${unrealizedPnl}%` : `$${totalPnl.toFixed(2)}`}
+          </div>
         </div>
         <div className="border border-surface-variant p-unit-4 bg-background hover:border-primary-fixed-dim transition-colors group relative">
           <div className="absolute top-0 right-0 w-2 h-2 bg-primary-fixed-dim m-unit-1 opacity-50 group-hover:opacity-100 transition-opacity" />
@@ -236,7 +246,7 @@ export default function TerminalPage() {
           </div>
           <div className="font-code-snippet text-code-snippet text-on-surface-variant mt-unit-2">
             {isRunning
-              ? `${traderStatus!.symbol} ${traderStatus!.leverage}x | Candles: ${traderStatus!.candles}`
+              ? `${traderStatus!.symbol} ${traderStatus!.leverage}x | Candles: ${traderStatus!.candles} | ${traderStatus!.position || "FLAT"}`
               : isInitializing
               ? "Running backtest, please wait..."
               : "No active trader"}

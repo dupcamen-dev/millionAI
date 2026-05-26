@@ -95,6 +95,8 @@ export interface TraderStatus {
   candles: number;
   trades: number;
   wins: number;
+  position?: string;
+  unrealized_pnl_pct?: number;
 }
 
 export interface TraderStartResult {

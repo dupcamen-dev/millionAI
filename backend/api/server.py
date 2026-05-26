@@ -86,10 +86,31 @@ def get_balance(x_access_code: str = Header("")):
     user_id = verify_access(x_access_code)
     now = time.time()
 
-    # If trader is running, use its live equity
+    # If trader is running, use its live equity but still fetch positions from Binance
     if _trader_instance["trader"] is not None and not _trader_instance["initializing"]:
         t = _trader_instance["trader"]
-        return {"equity": round(t.equity, 2), "balance": round(t.equity, 2), "positions": []}
+        equity = round(t.equity, 2)
+        positions = []
+        try:
+            api_key, api_secret = get_user_keys(user_id)
+            if not api_key:
+                api_key = os.getenv("API_KEY", "")
+                api_secret = os.getenv("API_SECRET", "")
+            if api_key:
+                raw_positions = t.binance.get_positions()
+                for p in raw_positions:
+                    amt = float(p.get("positionAmt", 0))
+                    positions.append({
+                        "symbol": p.get("symbol", ""),
+                        "side": "BUY" if amt > 0 else "SELL",
+                        "entry_price": float(p.get("entryPrice", 0)),
+                        "quantity": abs(amt),
+                        "leverage": int(float(p.get("leverage", 1))),
+                        "pnl": float(p.get("unRealizedProfit", 0)),
+                    })
+        except Exception:
+            pass
+        return {"equity": equity, "balance": equity, "positions": positions}
 
     # Return cached balance if fresh (< 30s)
     if now - _balance_cache["ts"] < 30 and _balance_cache["ts"] > 0:
@@ -271,7 +292,7 @@ def trader_start(x_access_code: str = Header("")):
                     telegram_chat_id = keys.get("telegram_chat_id", "")
             if telegram_token:
                 msg_queue = queue.Queue()
-                _telegram_bot = TelegramBot(telegram_token, msg_queue)
+                _telegram_bot = TelegramBot(telegram_token, msg_queue, trader_ref=lambda: _trader_instance.get("trader"))
                 t = threading.Thread(target=_telegram_bot.run, daemon=True)
                 t.start()
 
@@ -362,6 +383,12 @@ def trader_status(x_access_code: str = Header("")):
         return {"running": False, "initializing": False, "symbol": "", "leverage": 1, "equity": 0, "candles": 0, "trades": 0}
 
     t = inst["trader"]
+    pos = getattr(t, 'pos', 0)
+    entry_price = getattr(t, 'entry_price', 0)
+    unrealized_pnl = 0.0
+    if pos != 0 and entry_price > 0 and t.last_close > 0:
+        pnl_raw = (t.last_close - entry_price) / entry_price
+        unrealized_pnl = round(pnl_raw * t.leverage * (1 if pos == 1 else -1) * 100, 2)
     return {
         "running": True,
         "symbol": t.symbol,
@@ -370,6 +397,8 @@ def trader_status(x_access_code: str = Header("")):
         "candles": t.candle_count,
         "trades": t.trades,
         "wins": t.wins,
+        "position": "LONG" if pos == 1 else "SHORT" if pos == -1 else "FLAT",
+        "unrealized_pnl_pct": unrealized_pnl,
     }
 
 # ── Health ────────────────────────────────────────────────────────────
