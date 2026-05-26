@@ -1,5 +1,6 @@
 import math
 import sys
+import threading
 import time
 
 import numpy as np
@@ -41,6 +42,8 @@ class RealTrader(BaseTrader):
         self.auto_symbol = auto_symbol
         self.screener = AssetScreener(self.binance) if auto_symbol else None
         self.last_screener_candidates = []
+        self._restart_ws = None
+        self._last_reselect = 0.0
         super().__init__(symbol, leverage, config_file, lr, tau, sl, tp)
 
     def _load_lot_size(self):
@@ -238,10 +241,17 @@ class RealTrader(BaseTrader):
                 self.db.write_equity(self.user_id, self.equity, self.equity, self.symbol)
             self._tg(f"[REAL] CLOSE {self.symbol} {reason} PnL={pnl_pct*100:.2f}%")
 
-            # Auto-switch symbol after trade close
+            # Auto-switch symbol after trade close (cooldown 5 min)
             if self.auto_symbol:
-                self._log("SYS", "Re-running screener for next trade...")
-                self._auto_select_symbol()
+                now = time.time()
+                if now - self._last_reselect > 300:
+                    self._last_reselect = now
+                    old_symbol = self.symbol
+                    self._log("SYS", "Re-running screener for next trade...")
+                    self._auto_select_symbol()
+                    if self.symbol != old_symbol and self._restart_ws:
+                        self._log("SYS", f"Switching WS: {old_symbol} -> {self.symbol}")
+                        threading.Thread(target=self._restart_ws, daemon=True).start()
         except BinanceAPIError as e:
             msg = ERR_MESSAGES.get(e.code, f"Close error [{e.code}]: {e.message}")
             self._log("ERROR", msg)
