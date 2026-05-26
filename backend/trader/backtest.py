@@ -10,8 +10,11 @@ from snn.neuron import TradingNeuron
 from snn.rstpd import RSTDPEngine
 
 
-def quick_backtest(data, lr=0.01, tau=24.0, sl=0.05, tp=0.12, fee=0.002, use_micro=True):
-    neurons = [TradingNeuron() for _ in range(TOTAL_N)]
+def quick_backtest(data, lr=0.01, tau=24.0, sl=0.05, tp=0.12, fee=0.002, use_micro=True, init_weights=None):
+    if init_weights:
+        neurons = [TradingNeuron(nucleus=np.array(w, dtype=np.float32)) for w in init_weights]
+    else:
+        neurons = [TradingNeuron() for _ in range(TOTAL_N)]
     rstdp = RSTDPEngine(lr=lr, tau=tau)
     split = int(len(data) * 0.8)
     vol_hist = []

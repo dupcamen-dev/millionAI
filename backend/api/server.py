@@ -366,6 +366,17 @@ def trader_stop(x_access_code: str = Header("")):
     save_path = CONFIG_PATH
     trader.save_config(save_path)
 
+    # Save learned weights per symbol to Supabase for warm start
+    if db and user_id and hasattr(trader, 'neurons') and trader.neurons:
+        try:
+            weights = [n.nucleus.tolist() for n in trader.neurons]
+            risk_score = 0.0
+            if hasattr(trader, 'last_backtest_risk_score'):
+                risk_score = trader.last_backtest_risk_score
+            db.save_weights(user_id, trader.symbol, weights, trader.leverage, risk_score)
+        except Exception as e:
+            print(f"[Server] Failed to save weights: {e}")
+
     _trader_instance = {"trader": None, "thread": None, "listener": None, "user_id": None, "initializing": False, "init_error": None}
 
     return {"status": "stopped", "trades": trader.trades, "pnl_pct": round(trader.total_pnl * 100, 2)}

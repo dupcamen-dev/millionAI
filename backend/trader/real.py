@@ -37,6 +37,7 @@ class RealTrader(BaseTrader):
         self.auto_symbol = auto_symbol
         self.screener = AssetScreener(self.binance) if auto_symbol else None
         self.last_screener_candidates = []
+        self.last_backtest_risk_score = 0.0
         super().__init__(symbol, leverage, config_file, lr, tau, sl, tp)
 
     def _load_lot_size(self):
@@ -104,6 +105,17 @@ class RealTrader(BaseTrader):
             best_asset = None
             best_risk = -999
             best_result = None
+            warm_weights = {}
+
+            if self.db and self.user_id:
+                for c in candidates[:backtest_top]:
+                    try:
+                        saved = self.db.load_weights(self.user_id, c["symbol"])
+                        if saved and saved.get("weights"):
+                            warm_weights[c["symbol"]] = saved
+                            self._log("SYS", f"  Found saved weights for {c['symbol']} (risk={saved.get('risk_score', 0):.2f})")
+                    except Exception:
+                        pass
             backtest_list = candidates[:backtest_top]
             total = len(backtest_list)
 
@@ -127,7 +139,10 @@ class RealTrader(BaseTrader):
                     data[i] = [float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])]
                 self._log("SYS", f"  Running backtest on {len(data)} candles...")
                 t1 = time.time()
-                r = quick_backtest(data)
+                init_weights = warm_weights.get(a["symbol"], {}).get("weights")
+                if init_weights:
+                    self._log("SYS", f"  Warm-starting with saved weights")
+                r = quick_backtest(data, init_weights=init_weights)
                 self._log("SYS", f"  Backtest took {time.time()-t1:.1f}s")
                 risk = r["risk_score"]
                 self._log("SYS", f"  {r['trades']}t WR:{r['winrate']*100:.0f}% PnL:{r['total_pnl']*100:.1f}% risk:{risk:.2f}")
@@ -145,12 +160,21 @@ class RealTrader(BaseTrader):
 
             if best_result and best_result["trades"] > 0:
                 risk = best_result["risk_score"]
+                self.last_backtest_risk_score = risk
                 self.leverage = max(1, min(2, round(1 + risk * 2)))
                 self.binance.set_leverage(self.symbol, self.leverage)
                 if best_result.get("weights"):
                     from snn.neuron import TradingNeuron
-                    self.neurons = [TradingNeuron(nucleus=w) for w in best_result["weights"]]
+                    import numpy as np
+                    self.neurons = [TradingNeuron(nucleus=np.array(w, dtype=np.float32)) for w in best_result["weights"]]
                     self._log("SYS", f"Loaded trained weights from backtest ({len(self.neurons)} neurons)")
+                    if self.db and self.user_id:
+                        try:
+                            weights = [n.nucleus.tolist() for n in self.neurons]
+                            self.db.save_weights(self.user_id, self.symbol, weights, self.leverage, risk)
+                            self._log("SYS", f"Saved weights for {self.symbol} to DB")
+                        except Exception as ex:
+                            self._log("WARN", f"Failed to save weights: {ex}")
                 self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (risk={risk:.2f} | {best_result['trades']}t)")
             else:
                 self.leverage = 2

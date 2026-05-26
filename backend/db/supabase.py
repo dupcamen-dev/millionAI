@@ -1,4 +1,5 @@
 import json
+import os
 import time
 from datetime import datetime, timezone
 from supabase import create_client, Client
@@ -54,3 +55,42 @@ class SupabaseDB:
 
     def delete_logs(self, user_id: str):
         self.db.table("logs").delete().eq("user_id", user_id).execute()
+
+    def save_weights(self, user_id: str, symbol: str, weights: list, leverage: int = 1, risk_score: float = 0.0):
+        data = {
+            "user_id": user_id, "symbol": symbol.upper(),
+            "weights": json.dumps(weights), "leverage": leverage,
+            "risk_score": risk_score, "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            self.db.table("model_weights").upsert(data, on_conflict="user_id,symbol").execute()
+        except Exception:
+            fallback_dir = os.path.join(os.path.dirname(__file__), "..", "weights")
+            os.makedirs(fallback_dir, exist_ok=True)
+            path = os.path.join(fallback_dir, f"{user_id}_{symbol.upper()}.json")
+            with open(path, "w") as f:
+                json.dump(data, f)
+
+    def load_weights(self, user_id: str, symbol: str):
+        try:
+            resp = self.db.table("model_weights").select("*").eq("user_id", user_id).eq("symbol", symbol.upper()).execute()
+            if resp.data and len(resp.data) > 0:
+                row = resp.data[0]
+                return {
+                    "weights": json.loads(row["weights"]) if isinstance(row["weights"], str) else row["weights"],
+                    "leverage": row.get("leverage", 1),
+                    "risk_score": row.get("risk_score", 0),
+                }
+        except Exception:
+            pass
+        fallback_dir = os.path.join(os.path.dirname(__file__), "..", "weights")
+        path = os.path.join(fallback_dir, f"{user_id}_{symbol.upper()}.json")
+        if os.path.exists(path):
+            with open(path) as f:
+                data = json.load(f)
+            return {
+                "weights": json.loads(data["weights"]) if isinstance(data["weights"], str) else data["weights"],
+                "leverage": data.get("leverage", 1),
+                "risk_score": data.get("risk_score", 0),
+            }
+        return None
