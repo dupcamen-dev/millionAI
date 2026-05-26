@@ -86,7 +86,7 @@ class RealTrader(BaseTrader):
             self._log("ERROR", f"Init error: {e}")
             raise
 
-    def _auto_select_symbol(self, top_n=5, backtest_top=2):
+    def _auto_select_symbol(self, top_n=5, backtest_top=3):
         """Run screener -> backtest top candidates -> pick best by risk_score."""
         if getattr(self, '_selecting', False):
             return
