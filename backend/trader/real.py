@@ -15,7 +15,7 @@ ERR_MESSAGES = {
 
 def select_leverage(volatility_pct: float) -> int:
     if volatility_pct < 0.5:
-        return 10
+        return 5
     elif volatility_pct < 1.0:
         return 5
     elif volatility_pct < 2.0:
@@ -209,6 +209,11 @@ class RealTrader(BaseTrader):
             sys.stderr.write(line + "\n")
         if self.db and self.user_id:
             self.db.write_log(self.user_id, level.lower(), message)
+
+    def _log_state(self, ts_str, buy, sell, th, equity, eps):
+        msg = f"Eq=${equity:.4f} buy={buy:.3f} sell={sell:.3f} th={th:.3f} eps={eps:.3f}"
+        print(f"{ts_str} {msg}")
+        self._log("SYS", msg)
 
     def _tg(self, text):
         if self.telegram_queue:

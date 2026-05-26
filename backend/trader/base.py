@@ -153,10 +153,13 @@ class BaseTrader:
             buy = max(n.output for n in self.neurons[:BUY_N]) if self.neurons else 0
             sell = max(n.output for n in self.neurons[BUY_N:]) if len(self.neurons) > BUY_N else 0
             th = self.neurons[0].threshold if self.neurons else 0.3
-            print(f"{ts_str} Eq=${self.equity:.4f} buy={buy:.3f} sell={sell:.3f} th={th:.3f} eps={self.epsilon:.3f}")
+            self._log_state(ts_str, buy, sell, th, self.equity, self.epsilon)
 
         sys.stdout.flush()
         return action
+
+    def _log_state(self, ts_str, buy, sell, th, equity, eps):
+        print(f"{ts_str} Eq=${equity:.4f} buy={buy:.3f} sell={sell:.3f} th={th:.3f} eps={eps:.3f}")
 
     def on_entry(self, side, price, ts_str):
         print(f"{ts_str} {side} @ ${price:.6f} ({self.leverage}x)")

@@ -214,7 +214,7 @@ def trader_start(x_access_code: str = Header("")):
         trader._init_exchange()
 
         listener = BinanceWSListener(trader.on_candle)
-        thread = threading.Thread(target=listener.connect, args=(trader.symbol, "1m"), daemon=True)
+        thread = threading.Thread(target=listener.connect, args=(trader.symbol, "5m"), daemon=True)
         thread.start()
 
         _trader_instance = {"trader": trader, "thread": thread, "listener": listener, "user_id": user_id}
