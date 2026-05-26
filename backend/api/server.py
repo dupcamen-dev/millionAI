@@ -196,26 +196,58 @@ def assets_screener(x_access_code: str = Header("")):
 # ── Strategy ──────────────────────────────────────────────────────────
 @app.get("/api/v1/strategy")
 def get_strategy(x_access_code: str = Header("")):
-    verify_access(x_access_code)
-    config_path = CONFIG_PATH
-    if os.path.exists(config_path):
-        with open(config_path) as f:
-            data = json.load(f)
-        return data
-    return {"neurons": [], "symbol": "", "leverage": 1}
+    user_id = verify_access(x_access_code)
 
-@app.post("/api/v1/strategy")
-def save_strategy(payload: StrategyPayload, x_access_code: str = Header("")):
-    verify_access(x_access_code)
-    config_path = CONFIG_PATH
-    existing = {}
-    if os.path.exists(config_path):
-        with open(config_path) as f:
-            existing = json.load(f)
-    existing["neurons"] = [n if isinstance(n, list) else n.get("nucleus", []) for n in payload.neurons]
-    with open(config_path, "w") as f:
-        json.dump(existing, f)
-    return {"saved": True}
+    # If trader is running, return its live weights
+    inst = _get_instance(user_id)
+    if inst and inst["trader"] is not None and not inst["initializing"]:
+        t = inst["trader"]
+        if t.neurons:
+            return {
+                "neurons": [n.nucleus.tolist() if hasattr(n, 'nucleus') else n for n in t.neurons],
+                "symbol": t.symbol,
+                "leverage": t.leverage,
+                "live": True,
+                "trades": t.trades,
+                "wins": t.wins,
+            }
+
+    # Fall back to DB saved state for the user's last symbol
+    db = get_db()
+    if db:
+        try:
+            resp = db.db.table("model_weights").select("*").eq("user_id", user_id).order("updated_at", desc=True).limit(1).execute()
+            if resp.data and len(resp.data) > 0:
+                row = resp.data[0]
+                w = row.get("weights")
+                if isinstance(w, str):
+                    w = json.loads(w)
+                return {
+                    "neurons": w if w else [],
+                    "symbol": row.get("symbol", ""),
+                    "leverage": row.get("leverage", 1),
+                    "live": False,
+                    "risk_score": row.get("risk_score", 0),
+                }
+        except Exception:
+            pass
+
+    return {"neurons": [], "symbol": "", "leverage": 1, "live": False}
+
+@app.get("/api/v1/strategy/models")
+def list_saved_models(x_access_code: str = Header("")):
+    """Return all saved model states for this user."""
+    user_id = verify_access(x_access_code)
+    db = get_db()
+    if not db:
+        return {"models": []}
+    try:
+        resp = db.db.table("model_weights").select("symbol,leverage,risk_score,updated_at").eq("user_id", user_id).order("updated_at", desc=True).execute()
+        if resp.data:
+            return {"models": resp.data}
+    except Exception:
+        pass
+    return {"models": []}
 
 # ── Settings ──────────────────────────────────────────────────────────
 @app.get("/api/v1/settings/keys")

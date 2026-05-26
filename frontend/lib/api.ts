@@ -76,6 +76,21 @@ export interface StrategyData {
   neurons: number[][];
   symbol?: string;
   leverage?: number;
+  live?: boolean;
+  trades?: number;
+  wins?: number;
+  risk_score?: number;
+}
+
+export interface SavedModel {
+  symbol: string;
+  leverage: number;
+  risk_score: number;
+  updated_at: string;
+}
+
+export interface ModelsListData {
+  models: SavedModel[];
 }
 
 export interface ApiKeysData {
