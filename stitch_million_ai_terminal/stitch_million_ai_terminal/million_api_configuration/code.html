@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MILLION API Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "outline-variant": "#3b4b37",
+                      "surface-container-lowest": "#0e0e0e",
+                      "error-container": "#93000a",
+                      "on-error-container": "#ffdad6",
+                      "primary-container": "#00ff41",
+                      "tertiary-fixed-dim": "#e7bf99",
+                      "on-tertiary-container": "#7a5b3c",
+                      "surface-container-high": "#2a2a2a",
+                      "on-surface-variant": "#b9ccb2",
+                      "tertiary-container": "#ffd5ae",
+                      "outline": "#84967e",
+                      "tertiary-fixed": "#ffdcbd",
+                      "on-primary-fixed-variant": "#00530e",
+                      "on-primary-fixed": "#002203",
+                      "surface-tint": "#00e639",
+                      "surface-container-low": "#1b1b1b",
+                      "on-surface": "#e2e2e2",
+                      "on-tertiary": "#442b10",
+                      "surface-variant": "#353535",
+                      "on-background": "#e2e2e2",
+                      "on-tertiary-fixed": "#2c1701",
+                      "surface-container": "#1f1f1f",
+                      "primary-fixed": "#72ff70",
+                      "tertiary": "#fff8f4",
+                      "surface-container-highest": "#353535",
+                      "on-error": "#690005",
+                      "error": "#ffb4ab",
+                      "secondary": "#c6c6c7",
+                      "secondary-container": "#454747",
+                      "inverse-on-surface": "#303030",
+                      "on-primary": "#003907",
+                      "primary": "#ebffe2",
+                      "secondary-fixed-dim": "#c6c6c7",
+                      "on-secondary-fixed-variant": "#454747",
+                      "surface-dim": "#131313",
+                      "surface": "#131313",
+                      "background": "#131313",
+                      "inverse-primary": "#006e16",
+                      "on-secondary": "#2f3131",
+                      "surface-bright": "#393939",
+                      "primary-fixed-dim": "#00e639",
+                      "inverse-surface": "#e2e2e2",
+                      "on-secondary-fixed": "#1a1c1c",
+                      "secondary-fixed": "#e2e2e2",
+                      "on-primary-container": "#007117",
+                      "on-tertiary-fixed-variant": "#5d4124",
+                      "on-secondary-container": "#b4b5b5"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "unit-2": "8px",
+                      "gutter": "16px",
+                      "unit-4": "16px",
+                      "margin-desktop": "32px",
+                      "margin-mobile": "16px",
+                      "unit-1": "4px",
+                      "unit-8": "32px",
+                      "base": "4px"
+              },
+              "fontFamily": {
+                      "headline-lg": ["JetBrains Mono"],
+                      "code-snippet": ["JetBrains Mono"],
+                      "display": ["JetBrains Mono"],
+                      "headline-md": ["JetBrains Mono"],
+                      "body-lg": ["JetBrains Mono"],
+                      "body-sm": ["JetBrains Mono"],
+                      "label-caps": ["JetBrains Mono"]
+              },
+              "fontSize": {
+                      "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+                      "code-snippet": ["13px", {"lineHeight": "1.4", "fontWeight": "400"}],
+                      "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-md": ["24px", {"lineHeight": "1.2", "fontWeight": "500"}],
+                      "body-lg": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                      "body-sm": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                      "label-caps": ["12px", {"lineHeight": "1", "letterSpacing": "0.1em", "fontWeight": "700"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        body {
+            background-color: #000000; /* Strict Level 0 */
+            color: #e2e2e2;
+        }
+        /* Custom scrollbar for terminal feel */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0e0e0e; 
+            border-left: 1px solid #3b4b37;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b4b37; 
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00e639; 
+        }
+        
+        /* Blinking cursor effect */
+        .cursor-blink::after {
+            content: '█';
+            animation: blink 1s step-end infinite;
+            color: #00e639;
+            margin-left: 4px;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        
+        /* Remove default input focus outline */
+        input:focus {
+            outline: none;
+            box-shadow: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-body-sm bg-black overflow-x-hidden selection:bg-primary-fixed-dim selection:text-black">
+<!-- TopAppBar -->
+<header class="bg-background dark:bg-background text-primary-fixed-dim dark:text-primary-fixed-dim border-b border-outline-variant w-full px-margin-mobile md:px-margin-desktop h-16 flex justify-between items-center top-0 z-40 fixed">
+<div class="font-headline-md text-headline-md font-bold text-primary-fixed-dim dark:text-primary-fixed-dim">
+            MILLION
+        </div>
+<nav class="hidden md:flex items-center gap-unit-4">
+<a class="font-label-caps text-label-caps text-primary-fixed-dim hover:text-primary transition-colors duration-100 uppercase" href="#">INDEX</a>
+<a class="font-label-caps text-label-caps text-primary-fixed-dim hover:text-primary transition-colors duration-100 uppercase" href="#">ACCESS</a>
+<a class="font-label-caps text-label-caps bg-primary-fixed-dim text-on-primary px-unit-2 py-unit-1 transition-colors duration-100 hover:bg-primary-fixed-dim hover:text-on-primary uppercase scale-95 opacity-90" href="#">API</a>
+<a class="font-label-caps text-label-caps text-primary-fixed-dim hover:text-primary transition-colors duration-100 uppercase" href="#">ADMIN</a>
+</nav>
+<div class="flex items-center">
+<span class="material-symbols-outlined hover:text-primary cursor-pointer transition-colors" data-icon="terminal">terminal</span>
+</div>
+</header>
+<div class="flex flex-1 pt-16 h-screen">
+<!-- SideNavBar -->
+<aside class="hidden lg:flex flex-col h-full w-64 bg-background dark:bg-background text-primary-fixed-dim dark:text-primary-fixed-dim border-r border-outline-variant fixed left-0 z-30 pt-16">
+<div class="p-unit-4 border-b border-outline-variant mb-unit-4">
+<h2 class="font-headline-md text-headline-md text-primary-fixed-dim mb-unit-1">CONSOLE_V1.0</h2>
+<p class="font-code-snippet text-code-snippet text-outline">ID: ROOT_USER</p>
+</div>
+<nav class="flex-1 flex flex-col gap-unit-1 font-label-caps text-label-caps">
+<a class="text-primary-fixed-dim flex items-center gap-unit-2 px-unit-4 py-unit-2 hover:bg-surface-variant transition-colors border border-transparent hover:border-outline-variant" href="#">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+                    TERMINAL
+                </a>
+<a class="text-primary-fixed-dim flex items-center gap-unit-2 px-unit-4 py-unit-2 hover:bg-surface-variant transition-colors border border-transparent hover:border-outline-variant" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+                    ASSETS
+                </a>
+<a class="text-primary-fixed-dim flex items-center gap-unit-2 px-unit-4 py-unit-2 hover:bg-surface-variant transition-colors border border-transparent hover:border-outline-variant" href="#">
+<span class="material-symbols-outlined" data-icon="query_stats">query_stats</span>
+                    STRATEGY
+                </a>
+<a class="text-primary-fixed-dim flex items-center gap-unit-2 px-unit-4 py-unit-2 hover:bg-surface-variant transition-colors border border-transparent hover:border-outline-variant" href="#">
+<span class="material-symbols-outlined" data-icon="history_edu">history_edu</span>
+                    LOGS
+                </a>
+</nav>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 lg:ml-64 p-margin-mobile md:p-margin-desktop flex flex-col justify-center items-center h-[calc(100vh-64px-48px)] overflow-y-auto">
+<div class="w-full max-w-2xl">
+<!-- Terminal Window Container -->
+<div class="bg-black border border-primary-fixed-dim flex flex-col">
+<!-- Terminal Header -->
+<div class="bg-primary-fixed-dim text-black px-unit-4 py-unit-2 flex justify-between items-center">
+<span class="font-label-caps text-label-caps font-bold">API_SYNC_MODULE.exe</span>
+<div class="flex gap-unit-2">
+<span class="w-2 h-2 bg-black"></span>
+<span class="w-2 h-2 bg-black"></span>
+<span class="w-2 h-2 bg-black"></span>
+</div>
+</div>
+<!-- Terminal Body -->
+<div class="p-unit-8 flex flex-col gap-unit-8">
+<div class="font-code-snippet text-code-snippet text-outline-variant">
+<p class="mb-unit-2">&gt; INITIALIZING CONNECTION PROTOCOL...</p>
+<p class="mb-unit-2">&gt; SECURE CHANNEL: <span class="text-primary-fixed-dim">ESTABLISHED</span></p>
+<p class="mb-unit-4">&gt; <span class="text-on-surface cursor-blink">Connect your exchange to MILLION core.</span></p>
+</div>
+<form class="flex flex-col gap-unit-4">
+<!-- API Key Input -->
+<div class="flex flex-col gap-unit-2">
+<label class="font-label-caps text-label-caps text-primary-fixed-dim" for="api_key">API_KEY_INPUT</label>
+<div class="relative flex items-center">
+<span class="absolute left-unit-4 text-outline-variant font-code-snippet">&gt;</span>
+<input autocomplete="off" class="w-full bg-black border border-outline-variant text-on-surface font-code-snippet py-unit-2 pl-unit-8 pr-unit-4 focus:border-primary-fixed-dim transition-colors placeholder:text-surface-variant rounded-none" id="api_key" name="api_key" placeholder="ENTER_API_KEY..." type="text"/>
+</div>
+</div>
+<!-- Secret Key Input -->
+<div class="flex flex-col gap-unit-2">
+<label class="font-label-caps text-label-caps text-primary-fixed-dim" for="secret_key">SECRET_KEY_INPUT</label>
+<div class="relative flex items-center">
+<span class="absolute left-unit-4 text-outline-variant font-code-snippet">&gt;</span>
+<input autocomplete="off" class="w-full bg-black border border-outline-variant text-on-surface font-code-snippet py-unit-2 pl-unit-8 pr-unit-4 focus:border-primary-fixed-dim transition-colors placeholder:text-surface-variant rounded-none" id="secret_key" name="secret_key" placeholder="ENTER_SECRET_KEY..." type="password"/>
+</div>
+</div>
+<!-- Sync Button -->
+<div class="mt-unit-4">
+<button class="w-full bg-primary-fixed-dim text-black font-label-caps text-label-caps font-bold py-unit-4 hover:bg-white transition-colors uppercase group relative overflow-hidden" type="button">
+<span class="relative z-10">[ SYNC_ENGINE ]</span>
+<div class="absolute inset-0 bg-white transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-200 ease-out z-0"></div>
+</button>
+</div>
+<!-- Status Indicator -->
+<div class="mt-unit-2 flex items-center gap-unit-2 font-code-snippet text-code-snippet text-outline-variant justify-end">
+<span class="w-2 h-2 bg-outline-variant"></span>
+                                STATUS: AWAITING_INPUT
+                            </div>
+</form>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Footer -->
+<footer class="bg-background dark:bg-background text-primary-fixed-dim dark:text-primary-fixed-dim border-t border-outline-variant fixed bottom-0 w-full flex justify-between items-center px-margin-mobile md:px-margin-desktop py-unit-2 z-50 h-12">
+<div class="font-label-caps text-label-caps text-primary-fixed-dim">
+            MILLION
+        </div>
+<div class="font-code-snippet text-code-snippet uppercase hidden md:flex items-center gap-unit-4 overflow-hidden whitespace-nowrap">
+<!-- Data Ticker Simulation -->
+<span class="text-outline">SYS_LOAD: 12%</span>
+<span class="text-outline">|</span>
+<span class="text-outline">LATENCY: 4ms</span>
+<span class="text-outline">|</span>
+<span class="text-outline">AI: ONLINE // MARKET: LIVE // SYS_REF: 0x71C</span>
+</div>
+<div class="flex items-center gap-unit-4 font-code-snippet text-code-snippet uppercase">
+<a class="text-outline hover:text-primary-fixed-dim transition-all" href="#">ST_01</a>
+<a class="text-outline hover:text-primary-fixed-dim transition-all" href="#">ST_02</a>
+<a class="text-outline hover:text-primary-fixed-dim transition-all" href="#">ST_03</a>
+</div>
+</footer>
+<!-- Persistent Command Line (Global) -->
+<div class="fixed bottom-12 left-0 w-full bg-black border-t border-outline-variant h-8 flex items-center px-unit-4 z-40 hidden lg:flex lg:pl-[272px]">
+<span class="text-primary-fixed-dim font-code-snippet mr-unit-2">$</span>
+<input class="bg-transparent border-none text-on-surface font-code-snippet w-full focus:ring-0 p-0 text-sm" placeholder="_" type="text"/>
+</div>
+</body></html>

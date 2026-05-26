@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MILLION // CONSOLE_V1.0</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-smoothing: antialiased;
+        }
+        /* Custom scrollbar for terminal vibe */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0e0e0e; 
+            border-left: 1px solid #353535;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #353535; 
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00e639; 
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline-variant": "#3b4b37",
+                        "surface-container-lowest": "#0e0e0e",
+                        "error-container": "#93000a",
+                        "on-error-container": "#ffdad6",
+                        "primary-container": "#00ff41",
+                        "tertiary-fixed-dim": "#e7bf99",
+                        "on-tertiary-container": "#7a5b3c",
+                        "surface-container-high": "#2a2a2a",
+                        "on-surface-variant": "#b9ccb2",
+                        "tertiary-container": "#ffd5ae",
+                        "outline": "#84967e",
+                        "tertiary-fixed": "#ffdcbd",
+                        "on-primary-fixed-variant": "#00530e",
+                        "on-primary-fixed": "#002203",
+                        "surface-tint": "#00e639",
+                        "surface-container-low": "#1b1b1b",
+                        "on-surface": "#e2e2e2",
+                        "on-tertiary": "#442b10",
+                        "surface-variant": "#353535",
+                        "on-background": "#e2e2e2",
+                        "on-tertiary-fixed": "#2c1701",
+                        "surface-container": "#1f1f1f",
+                        "primary-fixed": "#72ff70",
+                        "tertiary": "#fff8f4",
+                        "surface-container-highest": "#353535",
+                        "on-error": "#690005",
+                        "error": "#ffb4ab",
+                        "secondary": "#c6c6c7",
+                        "secondary-container": "#454747",
+                        "inverse-on-surface": "#303030",
+                        "on-primary": "#003907",
+                        "primary": "#ebffe2",
+                        "secondary-fixed-dim": "#c6c6c7",
+                        "on-secondary-fixed-variant": "#454747",
+                        "surface-dim": "#131313",
+                        "surface": "#131313",
+                        "background": "#131313",
+                        "inverse-primary": "#006e16",
+                        "on-secondary": "#2f3131",
+                        "surface-bright": "#393939",
+                        "primary-fixed-dim": "#00e639",
+                        "inverse-surface": "#e2e2e2",
+                        "on-secondary-fixed": "#1a1c1c",
+                        "secondary-fixed": "#e2e2e2",
+                        "on-primary-container": "#007117",
+                        "on-tertiary-fixed-variant": "#5d4124",
+                        "on-secondary-container": "#b4b5b5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit-2": "8px",
+                        "gutter": "16px",
+                        "unit-4": "16px",
+                        "margin-desktop": "32px",
+                        "margin-mobile": "16px",
+                        "unit-1": "4px",
+                        "unit-8": "32px",
+                        "base": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["JetBrains Mono"],
+                        "code-snippet": ["JetBrains Mono"],
+                        "display": ["JetBrains Mono"],
+                        "headline-md": ["JetBrains Mono"],
+                        "body-lg": ["JetBrains Mono"],
+                        "body-sm": ["JetBrains Mono"],
+                        "label-caps": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "500" }],
+                        "code-snippet": ["13px", { "lineHeight": "1.4", "fontWeight": "400" }],
+                        "display": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "1.2", "fontWeight": "500" }],
+                        "body-lg": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "body-sm": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "1", "letterSpacing": "0.1em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-lg antialiased selection:bg-primary-fixed-dim selection:text-on-primary h-screen overflow-hidden flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-background dark:bg-background border-b border-outline-variant flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop h-16 shrink-0 z-50">
+<div class="font-headline-md text-headline-md font-bold text-primary-fixed-dim dark:text-primary-fixed-dim uppercase tracking-tight">
+            MILLION
+        </div>
+<nav class="hidden md:flex gap-unit-4 font-label-caps text-label-caps">
+<a class="text-primary-fixed-dim hover:text-primary transition-colors duration-100 uppercase" href="#">INDEX</a>
+<a class="text-primary-fixed-dim hover:text-primary transition-colors duration-100 uppercase" href="#">ACCESS</a>
+<a class="bg-primary-fixed-dim text-on-primary px-unit-2 py-unit-1 scale-95 opacity-90 transition-colors duration-100 uppercase" href="#">ADMIN</a>
+<a class="text-primary-fixed-dim hover:text-primary transition-colors duration-100 uppercase" href="#">API</a>
+</nav>
+<div class="flex items-center">
+<button class="text-primary-fixed-dim hover:text-primary transition-colors duration-100 hover:bg-primary-fixed-dim hover:text-on-primary p-unit-1">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<!-- SideNavBar -->
+<aside class="bg-background dark:bg-background hidden lg:flex flex-col h-full border-r border-outline-variant w-64 shrink-0 z-40">
+<div class="p-unit-4 border-b border-outline-variant mb-unit-4">
+<div class="font-headline-md text-headline-md text-primary-fixed-dim mb-unit-1 uppercase">CONSOLE_V1.0</div>
+<div class="font-code-snippet text-code-snippet text-outline uppercase">ID: ROOT_USER</div>
+</div>
+<nav class="flex flex-col font-label-caps text-label-caps w-full">
+<a class="bg-primary-fixed-dim text-on-primary flex items-center gap-unit-2 px-unit-4 py-unit-2 uppercase w-full outline-none focus:outline-none" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="terminal">terminal</span>
+                    TERMINAL
+                </a>
+<a class="text-primary-fixed-dim flex items-center gap-unit-2 px-unit-4 py-unit-2 hover:bg-surface-variant transition-colors uppercase w-full outline-none focus:outline-none focus:border focus:border-outline-variant" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="account_balance_wallet">account_balance_wallet</span>
+                    ASSETS
+                </a>
+<a class="text-primary-fixed-dim flex items-center gap-unit-2 px-unit-4 py-unit-2 hover:bg-surface-variant transition-colors uppercase w-full outline-none focus:outline-none focus:border focus:border-outline-variant" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="query_stats">query_stats</span>
+                    STRATEGY
+                </a>
+<a class="text-primary-fixed-dim flex items-center gap-unit-2 px-unit-4 py-unit-2 hover:bg-surface-variant transition-colors uppercase w-full outline-none focus:outline-none focus:border focus:border-outline-variant" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="history_edu">history_edu</span>
+                    LOGS
+                </a>
+</nav>
+</aside>
+<!-- Main Canvas -->
+<main class="flex-1 overflow-y-auto p-margin-mobile md:p-margin-desktop bg-surface-container-lowest">
+<div class="max-w-7xl mx-auto space-y-unit-8">
+<!-- Section Header -->
+<div class="border-b border-surface-variant pb-unit-2 flex justify-between items-end">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface uppercase">Overview</h1>
+<p class="font-code-snippet text-code-snippet text-outline mt-unit-1">&gt; SYS.STATUS: OPTIMAL</p>
+</div>
+<div class="font-label-caps text-label-caps text-primary-fixed-dim border border-primary-fixed-dim px-unit-2 py-unit-1 animate-pulse">
+                        LIVE
+                    </div>
+</div>
+<!-- Top Section: Balances Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<!-- Balance Card -->
+<div class="border border-surface-variant p-unit-4 bg-background hover:border-primary-fixed-dim transition-colors group relative">
+<div class="absolute top-0 right-0 w-2 h-2 bg-primary-fixed-dim m-unit-1 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+<div class="font-label-caps text-label-caps text-outline mb-unit-2 uppercase">Total Balance (Futures)</div>
+<div class="font-display text-display text-primary-fixed-dim">$1,204,590.45</div>
+<div class="font-code-snippet text-code-snippet text-on-surface-variant mt-unit-2 flex items-center gap-unit-1">
+<span class="material-symbols-outlined text-[14px] text-primary-fixed-dim">arrow_upward</span>
+                            +2.4% (24h)
+                        </div>
+</div>
+<!-- Equity Card -->
+<div class="border border-surface-variant p-unit-4 bg-background hover:border-primary-fixed-dim transition-colors group relative">
+<div class="absolute top-0 right-0 w-2 h-2 bg-primary-fixed-dim m-unit-1 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+<div class="font-label-caps text-label-caps text-outline mb-unit-2 uppercase">Equity</div>
+<div class="font-display text-display text-primary-fixed-dim">$1,350,112.00</div>
+<div class="font-code-snippet text-code-snippet text-on-surface-variant mt-unit-2 flex items-center gap-unit-1">
+<span class="material-symbols-outlined text-[14px] text-primary-fixed-dim">arrow_upward</span>
+                            +1.8% (24h)
+                        </div>
+</div>
+<!-- Unrealized PnL Card -->
+<div class="border border-surface-variant p-unit-4 bg-background hover:border-primary-fixed-dim transition-colors group relative">
+<div class="absolute top-0 right-0 w-2 h-2 bg-primary-fixed-dim m-unit-1 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+<div class="font-label-caps text-label-caps text-outline mb-unit-2 uppercase">Unrealized PnL</div>
+<div class="font-display text-display text-primary-fixed-dim">+$145,521.55</div>
+<div class="font-code-snippet text-code-snippet text-on-surface-variant mt-unit-2 flex items-center gap-unit-1">
+<span class="material-symbols-outlined text-[14px] text-outline">trending_up</span>
+                            Active Positions: 4
+                        </div>
+</div>
+</div>
+<!-- Middle Section: Open Positions Table -->
+<div class="border border-surface-variant bg-background">
+<div class="p-unit-4 border-b border-surface-variant flex justify-between items-center bg-surface-container-low">
+<h2 class="font-label-caps text-label-caps text-on-surface uppercase">OPEN_POSITIONS</h2>
+<button class="font-code-snippet text-code-snippet text-primary-fixed-dim border border-surface-variant px-unit-2 py-unit-1 hover:bg-primary-fixed-dim hover:text-on-primary transition-colors">
+                            CLOSE_ALL
+                        </button>
+</div>
+<div class="w-full overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-surface-variant font-label-caps text-label-caps text-outline">
+<th class="p-unit-4 uppercase font-normal">ASSET</th>
+<th class="p-unit-4 uppercase font-normal text-right">SIZE</th>
+<th class="p-unit-4 uppercase font-normal text-right">ENTRY</th>
+<th class="p-unit-4 uppercase font-normal text-right">MARK_PRICE</th>
+<th class="p-unit-4 uppercase font-normal text-right">PNL</th>
+</tr>
+</thead>
+<tbody class="font-code-snippet text-code-snippet text-on-surface">
+<tr class="border-b border-surface-variant hover:bg-surface-container-low transition-colors group">
+<td class="p-unit-4 flex items-center gap-unit-2">
+<div class="w-2 h-2 bg-primary-fixed-dim"></div>
+                                        BTC-PERP
+                                    </td>
+<td class="p-unit-4 text-right">12.500</td>
+<td class="p-unit-4 text-right">62,100.00</td>
+<td class="p-unit-4 text-right">64,250.00</td>
+<td class="p-unit-4 text-right text-primary-fixed-dim group-hover:font-bold">+26,875.00</td>
+</tr>
+<tr class="border-b border-surface-variant hover:bg-surface-container-low transition-colors group">
+<td class="p-unit-4 flex items-center gap-unit-2">
+<div class="w-2 h-2 bg-primary-fixed-dim"></div>
+                                        ETH-PERP
+                                    </td>
+<td class="p-unit-4 text-right">150.00</td>
+<td class="p-unit-4 text-right">3,400.50</td>
+<td class="p-unit-4 text-right">3,450.25</td>
+<td class="p-unit-4 text-right text-primary-fixed-dim group-hover:font-bold">+7,462.50</td>
+</tr>
+<tr class="border-b border-surface-variant hover:bg-surface-container-low transition-colors group">
+<td class="p-unit-4 flex items-center gap-unit-2">
+<div class="w-2 h-2 bg-error"></div>
+                                        SOL-PERP
+                                    </td>
+<td class="p-unit-4 text-right">-500.00</td>
+<td class="p-unit-4 text-right">145.20</td>
+<td class="p-unit-4 text-right">142.10</td>
+<td class="p-unit-4 text-right text-primary-fixed-dim group-hover:font-bold">+1,550.00</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="p-unit-4 flex items-center gap-unit-2">
+<div class="w-2 h-2 bg-primary-fixed-dim"></div>
+                                        LINK-PERP
+                                    </td>
+<td class="p-unit-4 text-right">2,000.0</td>
+<td class="p-unit-4 text-right">18.50</td>
+<td class="p-unit-4 text-right">19.20</td>
+<td class="p-unit-4 text-right text-primary-fixed-dim group-hover:font-bold">+1,400.00</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Bottom Section: Status Log -->
+<div class="border border-surface-variant bg-background flex flex-col">
+<div class="p-unit-4 border-b border-surface-variant flex justify-between items-center bg-surface-container-low">
+<h2 class="font-label-caps text-label-caps text-on-surface uppercase">SYS.LOG_STREAM</h2>
+<div class="flex gap-unit-2">
+<span class="w-3 h-3 border border-outline-variant bg-background"></span>
+<span class="w-3 h-3 border border-outline-variant bg-background"></span>
+<span class="w-3 h-3 border border-outline-variant bg-primary-fixed-dim"></span>
+</div>
+</div>
+<div class="h-48 overflow-y-auto p-unit-4 font-code-snippet text-code-snippet text-on-surface-variant flex flex-col gap-unit-1 bg-surface-container-lowest" id="log-container">
+<div class="flex gap-unit-2"><span class="text-outline">10:42:01</span><span class="text-primary-fixed-dim">&gt;</span><span>[SYS] WebSocket connection established to cluster A.</span></div>
+<div class="flex gap-unit-2"><span class="text-outline">10:42:05</span><span class="text-primary-fixed-dim">&gt;</span><span>[AI] Analyzing order book depth for BTC-PERP. Confidence: 94%.</span></div>
+<div class="flex gap-unit-2"><span class="text-outline">10:42:12</span><span class="text-primary-fixed-dim">&gt;</span><span>[EXEC] Placing limit bid: 1.5 BTC @ 64,240.00.</span></div>
+<div class="flex gap-unit-2"><span class="text-outline">10:42:14</span><span class="text-primary-fixed-dim">&gt;</span><span class="text-primary-fixed-dim">[OK] Order filled partially: 0.8 BTC @ 64,240.00.</span></div>
+<div class="flex gap-unit-2"><span class="text-outline">10:42:15</span><span class="text-primary-fixed-dim">&gt;</span><span>[SYS] Recalculating exposure limits.</span></div>
+<div class="flex gap-unit-2"><span class="text-outline">10:42:30</span><span class="text-primary-fixed-dim">&gt;</span><span>[AI] Volatility spike detected in ETH. Adjusting trailing stops.</span></div>
+<div class="flex gap-unit-2"><span class="text-outline">10:42:45</span><span class="text-primary-fixed-dim animate-pulse">_</span><span></span></div>
+</div>
+<div class="p-unit-2 border-t border-surface-variant bg-background flex items-center gap-unit-2">
+<span class="text-primary-fixed-dim font-code-snippet pl-unit-2">$</span>
+<input class="bg-transparent border-none text-on-surface font-code-snippet text-code-snippet w-full focus:ring-0 focus:outline-none placeholder:text-outline" placeholder="Enter command..." type="text"/>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Footer -->
+<footer class="bg-background dark:bg-background border-t border-outline-variant w-full flex justify-between items-center px-margin-mobile md:px-margin-desktop py-unit-2 z-50 shrink-0 font-code-snippet text-code-snippet uppercase">
+<div class="text-primary-fixed-dim font-label-caps text-label-caps">MILLION</div>
+<div class="hidden md:flex gap-unit-4">
+<span class="text-outline hover:text-primary-fixed-dim transition-all cursor-pointer">ST_01</span>
+<span class="text-outline hover:text-primary-fixed-dim transition-all cursor-pointer">ST_02</span>
+<span class="text-outline hover:text-primary-fixed-dim transition-all cursor-pointer">ST_03</span>
+</div>
+<div class="text-primary-fixed-dim font-bold underline animate-pulse">
+            AI: ONLINE // MARKET: LIVE // SYS_REF: 0x71C
+        </div>
+</footer>
+<script>
+        // Simple JS to auto-scroll log to bottom
+        const logContainer = document.getElementById('log-container');
+        if(logContainer) {
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+    </script>
+</body></html>

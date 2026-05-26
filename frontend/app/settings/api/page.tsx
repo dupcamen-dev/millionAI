@@ -1,14 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
 export default function ApiConfigPage() {
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [telegramToken, setTelegramToken] = useState("");
   const [telegramChatId, setTelegramChatId] = useState("");
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("MILLION_ACCESS_CODE");
+    if (stored !== "1231") {
+      router.push("/access");
+    } else {
+      setAuthorized(true);
+    }
+  }, [router]);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,19 +35,11 @@ export default function ApiConfigPage() {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  if (!authorized) return null;
+
   return (
     <div className="min-h-screen bg-background text-on-surface font-body-lg flex flex-col">
-      <header className="bg-background border-b border-outline-variant flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop h-16 shrink-0 z-50">
-        <Link href="/" className="font-headline-md text-headline-md font-bold text-primary-fixed-dim uppercase tracking-tight">
-          MILLION
-        </Link>
-        <nav className="hidden md:flex gap-unit-4 font-label-caps text-label-caps">
-          <Link href="/" className="text-primary-fixed-dim hover:text-primary transition-colors duration-100 uppercase">INDEX</Link>
-          <Link href="/auth" className="text-primary-fixed-dim hover:text-primary transition-colors duration-100 uppercase">ACCESS</Link>
-          <Link href="/dashboard" className="text-primary-fixed-dim hover:text-primary transition-colors duration-100 uppercase">ADMIN</Link>
-          <span className="bg-primary-fixed-dim text-on-primary px-unit-2 py-unit-1 opacity-90 uppercase">API</span>
-        </nav>
-      </header>
+      <Header />
 
       <main className="flex-1 flex items-start justify-center px-margin-mobile md:px-margin-desktop py-unit-8">
         <div className="w-full max-w-2xl">
@@ -125,12 +131,7 @@ export default function ApiConfigPage() {
         </div>
       </main>
 
-      <footer className="bg-background border-t border-outline-variant w-full flex justify-between items-center px-margin-mobile md:px-margin-desktop py-unit-2 z-50 shrink-0 font-code-snippet text-code-snippet uppercase">
-        <div className="text-primary-fixed-dim font-label-caps text-label-caps">MILLION</div>
-        <div className="text-primary-fixed-dim font-bold animate-pulse">
-          AI: ONLINE // MARKET: LIVE // SYS_REF: 0x71C
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

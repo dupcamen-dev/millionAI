@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MILLION - ACCESS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "outline-variant": "#3b4b37",
+                      "surface-container-lowest": "#0e0e0e",
+                      "error-container": "#93000a",
+                      "on-error-container": "#ffdad6",
+                      "primary-container": "#00ff41",
+                      "tertiary-fixed-dim": "#e7bf99",
+                      "on-tertiary-container": "#7a5b3c",
+                      "surface-container-high": "#2a2a2a",
+                      "on-surface-variant": "#b9ccb2",
+                      "tertiary-container": "#ffd5ae",
+                      "outline": "#84967e",
+                      "tertiary-fixed": "#ffdcbd",
+                      "on-primary-fixed-variant": "#00530e",
+                      "on-primary-fixed": "#002203",
+                      "surface-tint": "#00e639",
+                      "surface-container-low": "#1b1b1b",
+                      "on-surface": "#e2e2e2",
+                      "on-tertiary": "#442b10",
+                      "surface-variant": "#353535",
+                      "on-background": "#e2e2e2",
+                      "on-tertiary-fixed": "#2c1701",
+                      "surface-container": "#1f1f1f",
+                      "primary-fixed": "#72ff70",
+                      "tertiary": "#fff8f4",
+                      "surface-container-highest": "#353535",
+                      "on-error": "#690005",
+                      "error": "#ffb4ab",
+                      "secondary": "#c6c6c7",
+                      "secondary-container": "#454747",
+                      "inverse-on-surface": "#303030",
+                      "on-primary": "#003907",
+                      "primary": "#ebffe2",
+                      "secondary-fixed-dim": "#c6c6c7",
+                      "on-secondary-fixed-variant": "#454747",
+                      "surface-dim": "#131313",
+                      "surface": "#131313",
+                      "background": "#131313",
+                      "inverse-primary": "#006e16",
+                      "on-secondary": "#2f3131",
+                      "surface-bright": "#393939",
+                      "primary-fixed-dim": "#00e639",
+                      "inverse-surface": "#e2e2e2",
+                      "on-secondary-fixed": "#1a1c1c",
+                      "secondary-fixed": "#e2e2e2",
+                      "on-primary-container": "#007117",
+                      "on-tertiary-fixed-variant": "#5d4124",
+                      "on-secondary-container": "#b4b5b5"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "unit-2": "8px",
+                      "gutter": "16px",
+                      "unit-4": "16px",
+                      "margin-desktop": "32px",
+                      "margin-mobile": "16px",
+                      "unit-1": "4px",
+                      "unit-8": "32px",
+                      "base": "4px"
+              },
+              "fontFamily": {
+                      "headline-lg": [
+                              "JetBrains Mono"
+                      ],
+                      "code-snippet": [
+                              "JetBrains Mono"
+                      ],
+                      "display": [
+                              "JetBrains Mono"
+                      ],
+                      "headline-md": [
+                              "JetBrains Mono"
+                      ],
+                      "body-lg": [
+                              "JetBrains Mono"
+                      ],
+                      "body-sm": [
+                              "JetBrains Mono"
+                      ],
+                      "label-caps": [
+                              "JetBrains Mono"
+                      ]
+              },
+              "fontSize": {
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "code-snippet": [
+                              "13px",
+                              {
+                                      "lineHeight": "1.4",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display": [
+                              "48px",
+                              {
+                                      "lineHeight": "1.1",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "1.5",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "1.5",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-caps": [
+                              "12px",
+                              {
+                                      "lineHeight": "1",
+                                      "letterSpacing": "0.1em",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        body {
+            background-color: #000000;
+            color: #e2e2e2;
+        }
+        .blinking-cursor {
+            display: inline-block;
+            width: 8px;
+            height: 1em;
+            background-color: #00e639;
+            animation: blink 1s step-end infinite;
+            vertical-align: middle;
+            margin-left: 4px;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        input:focus {
+            outline: none;
+            box-shadow: none;
+        }
+        
+        /* CRT Effect Overlay */
+        .crt::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 2;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+      </style>
+</head>
+<body class="font-body-lg text-on-background h-screen w-screen overflow-hidden flex items-center justify-center crt">
+<!-- Top Navigation Suppressed for Transactional Authentication Flow -->
+<!-- Main Content Canvas -->
+<main class="w-full max-w-2xl px-margin-mobile md:px-margin-desktop z-10">
+<!-- Terminal Window Encapsulation -->
+<div class="border border-primary-fixed-dim bg-black p-unit-8 flex flex-col gap-unit-8">
+<!-- Header / Status -->
+<div class="border-b border-outline-variant pb-unit-4 flex justify-between items-center">
+<span class="font-label-caps text-label-caps text-primary-fixed-dim">SYS_AUTH_NODE</span>
+<span class="font-code-snippet text-code-snippet text-on-surface-variant flex items-center gap-unit-2">
+<span class="material-symbols-outlined text-[16px] text-primary-fixed-dim" data-icon="lock" style="font-variation-settings: 'FILL' 1;">lock</span>
+                    SECURE CONNECTION
+                </span>
+</div>
+<!-- Content Area -->
+<div class="flex flex-col gap-unit-4 pt-unit-4">
+<p class="font-headline-md text-headline-md text-primary-fixed-dim uppercase">SECURITY PROTOCOL: ENTER UNIQUE ACCESS CODE</p>
+<div class="mt-unit-8">
+<form action="#" class="flex flex-col gap-unit-8" id="authForm" method="POST">
+<!-- Command Prompt Input -->
+<div class="flex items-center border-b border-outline-variant focus-within:border-primary-fixed-dim pb-unit-2 transition-colors">
+<span class="font-headline-lg text-headline-lg text-primary-fixed-dim mr-unit-2">&gt;</span>
+<div class="relative flex-grow">
+<input autocomplete="off" autofocus="" class="w-full bg-transparent border-none text-primary-fixed-dim font-headline-lg text-headline-lg p-0 focus:ring-0 placeholder-transparent tracking-[0.2em]" id="accessCode" required="" type="password"/>
+<span class="absolute left-0 top-1/2 -translate-y-1/2 text-primary-fixed-dim font-headline-lg text-headline-lg pointer-events-none" id="maskDisplay"></span>
+<span class="blinking-cursor absolute top-1/2 -translate-y-1/2" id="cursorElem"></span>
+</div>
+</div>
+<!-- Action -->
+<div class="flex justify-end mt-unit-4">
+<button class="bg-black border border-primary-fixed-dim text-primary-fixed-dim font-label-caps text-label-caps px-unit-8 py-unit-4 hover:bg-primary-fixed-dim hover:text-black transition-colors duration-100 flex items-center gap-unit-2" type="submit">
+                                [ EXECUTE ]
+                                <span class="material-symbols-outlined text-[16px]" data-icon="terminal">terminal</span>
+</button>
+</div>
+</form>
+</div>
+</div>
+<!-- Terminal Footer Output Simulation -->
+<div class="mt-unit-8 pt-unit-4 border-t border-outline-variant font-code-snippet text-code-snippet text-on-surface-variant opacity-50 flex flex-col gap-1">
+<p>&gt; INIT SECURE HANDSHAKE...</p>
+<p>&gt; AWAITING INPUT...</p>
+</div>
+</div>
+</main>
+<!-- Footer: Static Data Ticker -->
+<footer class="fixed bottom-0 w-full flex justify-between items-center px-margin-mobile md:px-margin-desktop py-unit-2 z-50 border-t border-outline-variant bg-black">
+<span class="font-code-snippet text-code-snippet uppercase text-on-surface-variant">AI: ONLINE // MARKET: LIVE // SYS_REF: 0x71C</span>
+<span class="font-label-caps text-label-caps text-primary-fixed-dim">MILLION</span>
+</footer>
+<script>
+        // Custom Password Masking & Cursor Logic to maintain Terminal Aesthetic
+        const input = document.getElementById('accessCode');
+        const display = document.getElementById('maskDisplay');
+        const cursor = document.getElementById('cursorElem');
+        const form = document.getElementById('authForm');
+
+        function updateDisplay() {
+            const val = input.value;
+            // Mask with asterisks
+            const masked = '*'.repeat(val.length);
+            display.textContent = masked;
+            
+            // Move cursor to end of text
+            // Hacky approximation of character width for JetBrains Mono at headline-lg size
+            const charWidth = 20; // Adjust based on exact rendered width
+            const newLeft = val.length * charWidth + (val.length > 0 ? 8 : 0);
+            cursor.style.left = `${newLeft}px`;
+        }
+
+        input.addEventListener('input', updateDisplay);
+        
+        // Hide default input text completely
+        input.style.color = 'transparent';
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            // Simulate processing
+            const originalText = document.querySelector('button[type="submit"]').innerHTML;
+            document.querySelector('button[type="submit"]').innerHTML = '[ VERIFYING... ]';
+            document.querySelector('button[type="submit"]').classList.add('bg-primary-fixed-dim', 'text-black');
+            
+            setTimeout(() => {
+                // Reset for demo purposes
+                input.value = '';
+                updateDisplay();
+                document.querySelector('button[type="submit"]').innerHTML = originalText;
+                document.querySelector('button[type="submit"]').classList.remove('bg-primary-fixed-dim', 'text-black');
+                
+                // Add log output
+                const logArea = document.querySelector('.mt-unit-8.pt-unit-4.border-t');
+                const newLog = document.createElement('p');
+                newLog.textContent = '> AUTH FAILED: INVALID CREDENTIALS';
+                newLog.className = 'text-error';
+                logArea.appendChild(newLog);
+            }, 1000);
+        });
+    </script>
+</body></html>

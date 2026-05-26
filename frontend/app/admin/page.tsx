@@ -1,18 +1,9 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import Link from "next/link";
-
-interface Trade {
-  id: number;
-  time: string;
-  symbol: string;
-  side: "BUY" | "SELL";
-  entry: number;
-  exit: number;
-  pnl: number;
-  leverage: number;
-}
+import { useRouter } from "next/navigation";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
 interface Log {
   time: string;
@@ -20,11 +11,11 @@ interface Log {
   type: "sys" | "ai" | "exec" | "ok" | "err";
 }
 
-export default function DashboardPage() {
-  const [equity, setEquity] = useState(10.0);
-  const [balance, setBalance] = useState(10.0);
-  const [position, setPosition] = useState<{ symbol: string; side: string; size: number; entry: number; mark: number; pnl: number } | null>(null);
-  const [trades, setTrades] = useState<Trade[]>([]);
+export default function AdminPage() {
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState(false);
+  const [equity] = useState(10.0);
+  const [balance] = useState(10.0);
   const [logs, setLogs] = useState<Log[]>([
     { time: new Date().toLocaleTimeString(), text: "WebSocket connection established.", type: "sys" },
     { time: new Date().toLocaleTimeString(), text: "Neural network initialized. 16 neurons active.", type: "ai" },
@@ -32,34 +23,20 @@ export default function DashboardPage() {
   ]);
   const [command, setCommand] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("MILLION_ACCESS_CODE");
+    if (stored !== "1231") {
+      router.push("/access");
+    } else {
+      setAuthorized(true);
+    }
+  }, [router]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [logs]);
-
-  useEffect(() => {
-    const ws = new WebSocket("wss://fstream.binance.com/market/ws/sagausdt@kline_5m");
-    wsRef.current = ws;
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        const k = data.k;
-        if (k) {
-          const price = parseFloat(k.c);
-          setEquity((prev) => prev);
-          setPosition((prev) => {
-            if (!prev) return prev;
-            const pnl = prev.side === "LONG" ? (price - prev.entry) / prev.entry : (prev.entry - price) / prev.entry;
-            return { ...prev, mark: price, pnl: pnl * 100 };
-          });
-        }
-      } catch {}
-    };
-
-    return () => ws.close();
-  }, []);
 
   const handleCommand = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +47,7 @@ export default function DashboardPage() {
 
     switch (cmd) {
       case "/status":
-        addLog("sys", `Equity: $${equity.toFixed(2)} | Position: ${position ? position.side : "NONE"}`);
+        addLog("sys", `Equity: $${equity.toFixed(2)} | Balance: $${balance.toFixed(2)}`);
         break;
       case "/help":
         addLog("sys", "Commands: /status, /summary, /trades, /help");
@@ -88,29 +65,18 @@ export default function DashboardPage() {
     ]);
   };
 
+  if (!authorized) return null;
+
   const mockPositions = [
     { symbol: "BTC-PERP", size: "12.500", entry: "62,100.00", mark: "64,250.00", pnl: "+$26,875.00", dir: "long" },
     { symbol: "ETH-PERP", size: "150.00", entry: "3,400.50", mark: "3,450.25", pnl: "+$7,462.50", dir: "long" },
     { symbol: "SOL-PERP", size: "-500.00", entry: "145.20", mark: "142.10", pnl: "+$1,550.00", dir: "short" },
+    { symbol: "LINK-PERP", size: "2,000.00", entry: "18.40", mark: "19.20", pnl: "+$1,600.00", dir: "long" },
   ];
 
   return (
     <div className="min-h-screen bg-background text-on-surface font-body-lg flex flex-col">
-      <header className="bg-background border-b border-outline-variant flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop h-16 shrink-0 z-50">
-        <Link href="/" className="font-headline-md text-headline-md font-bold text-primary-fixed-dim uppercase tracking-tight">
-          MILLION
-        </Link>
-        <nav className="hidden md:flex gap-unit-4 font-label-caps text-label-caps">
-          <Link href="/" className="text-primary-fixed-dim hover:text-primary transition-colors duration-100 uppercase">INDEX</Link>
-          <Link href="/auth" className="text-primary-fixed-dim hover:text-primary transition-colors duration-100 uppercase">ACCESS</Link>
-          <span className="bg-primary-fixed-dim text-on-primary px-unit-2 py-unit-1 opacity-90 uppercase">ADMIN</span>
-          <Link href="/settings/api" className="text-primary-fixed-dim hover:text-primary transition-colors duration-100 uppercase">API</Link>
-        </nav>
-        <Link href="/auth" className="text-primary-fixed-dim hover:text-primary transition-colors duration-100">
-          <span className="material-symbols-outlined">terminal</span>
-        </Link>
-      </header>
-
+      <Header />
       <div className="flex flex-1 overflow-hidden">
         <aside className="bg-background hidden lg:flex flex-col border-r border-outline-variant w-64 shrink-0">
           <div className="p-unit-4 border-b border-outline-variant mb-unit-4">
@@ -119,19 +85,15 @@ export default function DashboardPage() {
           </div>
           <nav className="flex flex-col font-label-caps text-label-caps w-full">
             <span className="bg-primary-fixed-dim text-on-primary flex items-center gap-unit-2 px-unit-4 py-unit-2 uppercase w-full">
-              <span className="material-symbols-outlined text-[18px]">terminal</span>
               TERMINAL
             </span>
             <span className="text-primary-fixed-dim flex items-center gap-unit-2 px-unit-4 py-unit-2 hover:bg-surface-variant transition-colors uppercase w-full cursor-pointer">
-              <span className="material-symbols-outlined text-[18px]">account_balance_wallet</span>
               ASSETS
             </span>
             <span className="text-primary-fixed-dim flex items-center gap-unit-2 px-unit-4 py-unit-2 hover:bg-surface-variant transition-colors uppercase w-full cursor-pointer">
-              <span className="material-symbols-outlined text-[18px]">query_stats</span>
               STRATEGY
             </span>
             <span className="text-primary-fixed-dim flex items-center gap-unit-2 px-unit-4 py-unit-2 hover:bg-surface-variant transition-colors uppercase w-full cursor-pointer">
-              <span className="material-symbols-outlined text-[18px]">history_edu</span>
               LOGS
             </span>
           </nav>
@@ -155,7 +117,7 @@ export default function DashboardPage() {
                 <div className="font-label-caps text-label-caps text-outline mb-unit-2 uppercase">Total Balance (Futures)</div>
                 <div className="font-display text-display text-primary-fixed-dim">${balance.toFixed(2)}</div>
                 <div className="font-code-snippet text-code-snippet text-on-surface-variant mt-unit-2 flex items-center gap-unit-1">
-                  <span className="material-symbols-outlined text-[14px] text-primary-fixed-dim">arrow_upward</span>
+                  <span className="text-primary-fixed-dim">+</span>
                   +0.0% (24h)
                 </div>
               </div>
@@ -164,19 +126,17 @@ export default function DashboardPage() {
                 <div className="font-label-caps text-label-caps text-outline mb-unit-2 uppercase">Equity</div>
                 <div className="font-display text-display text-primary-fixed-dim">${equity.toFixed(2)}</div>
                 <div className="font-code-snippet text-code-snippet text-on-surface-variant mt-unit-2 flex items-center gap-unit-1">
-                  <span className="material-symbols-outlined text-[14px] text-primary-fixed-dim">arrow_upward</span>
+                  <span className="text-primary-fixed-dim">+</span>
                   +0.0% (24h)
                 </div>
               </div>
               <div className="border border-surface-variant p-unit-4 bg-background hover:border-primary-fixed-dim transition-colors group relative">
                 <div className="absolute top-0 right-0 w-2 h-2 bg-primary-fixed-dim m-unit-1 opacity-50 group-hover:opacity-100 transition-opacity" />
                 <div className="font-label-caps text-label-caps text-outline mb-unit-2 uppercase">Unrealized PnL</div>
-                <div className="font-display text-display text-primary-fixed-dim">
-                  {position ? `${position.pnl >= 0 ? "+" : ""}${position.pnl.toFixed(2)}%` : "$0.00"}
-                </div>
+                <div className="font-display text-display text-primary-fixed-dim">$145,521.55</div>
                 <div className="font-code-snippet text-code-snippet text-on-surface-variant mt-unit-2 flex items-center gap-unit-1">
-                  <span className="material-symbols-outlined text-[14px] text-outline">trending_up</span>
-                  {position ? `Active: ${position.symbol}` : "No active positions"}
+                  <span className="text-outline">~</span>
+                  Active Positions: 4
                 </div>
               </div>
             </div>
@@ -200,33 +160,18 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="font-code-snippet text-code-snippet text-on-surface">
-                    {position ? (
-                      <tr className="border-b border-surface-variant hover:bg-surface-container-low transition-colors group">
+                    {mockPositions.map((p, i) => (
+                      <tr key={i} className="border-b border-surface-variant hover:bg-surface-container-low transition-colors group">
                         <td className="p-unit-4 flex items-center gap-unit-2">
-                          <div className={`w-2 h-2 ${position.pnl >= 0 ? "bg-primary-fixed-dim" : "bg-error"}`} />
-                          {position.symbol}
+                          <div className={`w-2 h-2 ${p.dir === "long" ? "bg-primary-fixed-dim" : "bg-error"}`} />
+                          {p.symbol}
                         </td>
-                        <td className="p-unit-4 text-right">{position.size}</td>
-                        <td className="p-unit-4 text-right">{position.entry.toFixed(4)}</td>
-                        <td className="p-unit-4 text-right">{position.mark?.toFixed(4) || "-"}</td>
-                        <td className={`p-unit-4 text-right group-hover:font-bold ${position.pnl >= 0 ? "text-primary-fixed-dim" : "text-error"}`}>
-                          {position.pnl >= 0 ? "+" : ""}{position.pnl.toFixed(2)}%
-                        </td>
+                        <td className="p-unit-4 text-right">{p.size}</td>
+                        <td className="p-unit-4 text-right">{p.entry}</td>
+                        <td className="p-unit-4 text-right">{p.mark}</td>
+                        <td className="p-unit-4 text-right text-primary-fixed-dim group-hover:font-bold">{p.pnl}</td>
                       </tr>
-                    ) : (
-                      mockPositions.map((p, i) => (
-                        <tr key={i} className="border-b border-surface-variant hover:bg-surface-container-low transition-colors group">
-                          <td className="p-unit-4 flex items-center gap-unit-2">
-                            <div className={`w-2 h-2 ${p.dir === "long" ? "bg-primary-fixed-dim" : "bg-error"}`} />
-                            {p.symbol}
-                          </td>
-                          <td className="p-unit-4 text-right">{p.size}</td>
-                          <td className="p-unit-4 text-right">{p.entry}</td>
-                          <td className="p-unit-4 text-right">{p.mark}</td>
-                          <td className="p-unit-4 text-right text-primary-fixed-dim group-hover:font-bold">{p.pnl}</td>
-                        </tr>
-                      ))
-                    )}
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -267,18 +212,7 @@ export default function DashboardPage() {
           </div>
         </main>
       </div>
-
-      <footer className="bg-background border-t border-outline-variant w-full flex justify-between items-center px-margin-mobile md:px-margin-desktop py-unit-2 z-50 shrink-0 font-code-snippet text-code-snippet uppercase">
-        <div className="text-primary-fixed-dim font-label-caps text-label-caps">MILLION</div>
-        <div className="hidden md:flex gap-unit-4">
-          <span className="text-outline hover:text-primary-fixed-dim transition-all cursor-pointer">ST_01</span>
-          <span className="text-outline hover:text-primary-fixed-dim transition-all cursor-pointer">ST_02</span>
-          <span className="text-outline hover:text-primary-fixed-dim transition-all cursor-pointer">ST_03</span>
-        </div>
-        <div className="text-primary-fixed-dim font-bold underline animate-pulse">
-          AI: ONLINE // MARKET: LIVE // SYS_REF: 0x71C
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

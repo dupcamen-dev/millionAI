@@ -135,13 +135,16 @@ static void run_loop(OHLCVData* ohlcv, int start, int end,
                      int* trade_count_out, int* win_count_out,
                      float* pnl_total_out,
                      float tau, float thresh, int print_trades,
-                     float stop_loss_pct, float take_profit_pct) {
+                     float stop_loss_pct, float take_profit_pct,
+                     int use_micro_reward) {
     VolHistory vh;
     volhist_init(&vh);
 
     float spikes[SENSORY_CHANNELS];
     int trades = 0, wins = 0;
     float pnl_sum = 0.0f;
+    float prev_unrealized = 0.0f;
+    int has_prev_unrealized = 0;
 
     for (int c = start; c < end; c++) {
         float* ohlc = &ohlcv->data[c * 5];
@@ -160,11 +163,13 @@ static void run_loop(OHLCVData* ohlcv, int start, int end,
                 ts->pos = POS_LONG;
                 ts->entry_price = cl;
                 ts->entry_candle = c;
+                has_prev_unrealized = 0;
                 if (print_trades) printf("Candle %d: BUY at %.2f\n", c, cl);
             } else if (action == -1) {
                 ts->pos = POS_SHORT;
                 ts->entry_price = cl;
                 ts->entry_candle = c;
+                has_prev_unrealized = 0;
                 if (print_trades) printf("Candle %d: SELL at %.2f\n", c, cl);
             }
             /* Decay all eligibility traces (no position = no accumulation) */
@@ -177,6 +182,27 @@ static void run_loop(OHLCVData* ohlcv, int start, int end,
                                  spikes, SENSORY_CHANNELS,
                                  TradingCortex_neurons[i].output);
                 rstdp_decay(&rstdp[i]);
+            }
+
+            /* Micro-reward on each tick (dense signal from unrealized PnL change) */
+            if (use_micro_reward && has_prev_unrealized) {
+                float current_unrealized = (ts->pos == POS_LONG) ?
+                    (cl - ts->entry_price) / ts->entry_price :
+                    -(cl - ts->entry_price) / ts->entry_price;
+                for (int i = 0; i < NUM_TRADING; i++)
+                    rstdp_micro_reward(&rstdp[i],
+                        TradingCortex_neurons[i].nucleus,
+                        prev_unrealized, current_unrealized);
+            }
+            prev_unrealized = (ts->pos == POS_LONG) ?
+                (cl - ts->entry_price) / ts->entry_price :
+                -(cl - ts->entry_price) / ts->entry_price;
+            has_prev_unrealized = 1;
+
+            /* Update adaptive LR after each tick with micro-reward */
+            if (use_micro_reward) {
+                for (int i = 0; i < NUM_TRADING; i++)
+                    rstdp_update_adaptive_lr(&rstdp[i]);
             }
 
             /* Check for close: SL/TP takes priority over signal */
@@ -216,6 +242,7 @@ static void run_loop(OHLCVData* ohlcv, int start, int end,
                            c, close_reason, cl, pnl_with_sign * 100, total_reward, ts->equity);
 
                 ts->pos = POS_NONE;
+                has_prev_unrealized = 0;
             }
         }
 
@@ -244,6 +271,7 @@ static void run_loop(OHLCVData* ohlcv, int start, int end,
         if (print_trades)
             printf("Candle %d: Force close at %.2f, PnL=%.4f%%\n", end - 1, last[3], pnl * 100);
         ts->pos = POS_NONE;
+        has_prev_unrealized = 0;
     }
 
     *trade_count_out = trades;
@@ -262,6 +290,7 @@ int main(int argc, char** argv) {
     float take_prof = argc > 7 ? atof(argv[7]) : 0.0f;
     int   quiet     = argc > 8 ? atoi(argv[8]) : 0;      /* 1 = suppress trade logs */
     unsigned int rseed = argc > 9 ? (unsigned int)atoi(argv[9]) : (unsigned int)time(NULL);
+    int   use_micro = argc > 10 ? atoi(argv[10]) : 1;    /* 1 = enable micro-rewards */
     srand(rseed);
 
     /* Load data */
@@ -292,7 +321,7 @@ int main(int argc, char** argv) {
     float tr_pnl;
     run_loop(&ohlcv, 5, split, &ts, rstdp,
              &tr_trades, &tr_wins, &tr_pnl,
-             tau, thresh, 1 - quiet, stop_loss, take_prof);
+             tau, thresh, 1 - quiet, stop_loss, take_prof, use_micro);
 
     printf("\nTraining: %d trades, winrate=%.1f%%, total PnL=%.4f%%, final equity=%.2f\n\n",
            tr_trades, tr_trades > 0 ? 100.0f * tr_wins / tr_trades : 0,
@@ -313,7 +342,7 @@ int main(int argc, char** argv) {
     float te_pnl;
     run_loop(&ohlcv, split, ohlcv.count, &ts, rstdp,
              &te_trades, &te_wins, &te_pnl,
-             tau, thresh, 1 - quiet, stop_loss, take_prof);
+             tau, thresh, 1 - quiet, stop_loss, take_prof, use_micro);
 
     /* ============ RESULTS ============ */
     printf("\n=== RESULTS ===\n");
