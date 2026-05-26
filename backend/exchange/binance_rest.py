@@ -67,11 +67,17 @@ class BinanceFuturesAPI:
             url = f"{FAPI_BASE}{path}"
             if params:
                 url += "?" + urllib.parse.urlencode(params)
+        import time as _time
+        t0 = _time.time()
         req = urllib.request.Request(url, method=method)
         req.add_header("X-MBX-APIKEY", self.api_key)
         try:
             with urllib.request.urlopen(req, timeout=15) as r:
-                return json.loads(r.read())
+                data = json.loads(r.read())
+            elapsed = _time.time() - t0
+            if elapsed > 2:
+                print(f"[Binance] SLOW {method} {path} took {elapsed:.1f}s")
+            return data
         except urllib.error.HTTPError as e:
             body = e.read().decode()
             err = BinanceAPIError.from_response(body)
@@ -137,8 +143,13 @@ class BinanceFuturesAPI:
         return self._request("GET", "/fapi/v1/openOrders", signed=True, params=params)
 
     def get_klines(self, symbol: str, interval: str = "5m", limit: int = 500) -> list:
+        import time as _time
         params = {"symbol": symbol.upper(), "interval": interval, "limit": min(limit, 1500)}
-        return self._request("GET", "/fapi/v1/klines", signed=False, params=params)
+        t0 = _time.time()
+        result = self._request("GET", "/fapi/v1/klines", signed=False, params=params)
+        elapsed = _time.time() - t0
+        print(f"[Binance] get_klines({symbol}, {interval}, {limit}) -> {len(result) if isinstance(result, list) else 'ERROR'} in {elapsed:.1f}s")
+        return result
 
     def get_exchange_info(self) -> dict:
         now = time.time()

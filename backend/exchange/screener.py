@@ -8,9 +8,12 @@ class AssetScreener:
         self.api = api
 
     def scan(self, top_n=5, min_volume=100_000_000):
+        import time
+        t0 = time.time()
         tickers = self.api.get_ticker()
         if not isinstance(tickers, list):
             return []
+        print(f"[Screener] Got {len(tickers)} tickers in {time.time()-t0:.1f}s")
 
         candidates = []
         for t in tickers:
@@ -39,4 +42,5 @@ class AssetScreener:
             })
 
         candidates.sort(key=lambda x: -x["score"])
+        print(f"[Screener] Top {min(top_n, len(candidates))}/{len(candidates)} candidates in {time.time()-t0:.1f}s")
         return candidates[:top_n]

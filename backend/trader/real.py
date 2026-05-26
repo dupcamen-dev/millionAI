@@ -69,8 +69,10 @@ class RealTrader(BaseTrader):
 
     def _init_exchange(self):
         try:
+            self._log("SYS", "Loading lot size...")
             self._load_lot_size()
             if self.auto_symbol:
+                self._log("SYS", "Auto-selecting symbol via screener+backtest...")
                 self._auto_select_symbol()
             else:
                 self.binance.set_leverage(self.symbol, self.leverage)
@@ -111,8 +113,11 @@ class RealTrader(BaseTrader):
 
             for idx, a in enumerate(backtest_list, 1):
                 self._log("SYS", f"Backtest {idx}/{total}: {a['symbol']}...")
+                t0 = time.time()
                 try:
+                    self._log("SYS", f"  Fetching klines for {a['symbol']}...")
                     raw = self.binance.get_klines(a["symbol"], "5m", 500)
+                    self._log("SYS", f"  Got {len(raw) if raw else 0} candles in {time.time()-t0:.1f}s")
                 except Exception as e:
                     self._log("WARN", f"  skip — kline fetch failed: {e}")
                     time.sleep(1)
@@ -120,10 +125,14 @@ class RealTrader(BaseTrader):
                 if not raw or len(raw) < 100:
                     self._log("WARN", f"  skip — insufficient data ({len(raw) if raw else 0} candles)")
                     continue
+                self._log("SYS", f"  Building data array...")
                 data = np.zeros((len(raw), 5), dtype=np.float32)
                 for i, k in enumerate(raw):
                     data[i] = [float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])]
+                self._log("SYS", f"  Running backtest on {len(data)} candles...")
+                t1 = time.time()
                 r = quick_backtest(data)
+                self._log("SYS", f"  Backtest took {time.time()-t1:.1f}s")
                 risk = r["risk_score"]
                 self._log("SYS", f"  {r['trades']}t WR:{r['winrate']*100:.0f}% PnL:{r['total_pnl']*100:.1f}% risk:{risk:.2f}")
                 if risk > best_risk:
