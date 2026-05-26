@@ -29,6 +29,7 @@ CONFIG_PATH = os.getenv("CONFIG_FILE", "") or os.path.join(os.path.dirname(__fil
 
 _db = None
 _telegram_bot = None
+_start_lock = threading.Lock()
 _trader_instance = {"trader": None, "thread": None, "listener": None, "user_id": None, "initializing": False, "init_error": None}
 
 def get_db():
@@ -230,13 +231,16 @@ def save_settings_keys(payload: ApiKeysPayload, x_access_code: str = Header(""))
 # ── Trader Control ────────────────────────────────────────────────────
 @app.post("/api/v1/trader/start")
 def trader_start(x_access_code: str = Header("")):
-    global _trader_instance
+    global _trader_instance, _start_lock
     user_id = verify_access(x_access_code)
 
-    if _trader_instance["initializing"]:
-        raise HTTPException(409, "Trader is still initializing, please wait.")
-    if _trader_instance["trader"] is not None:
-        raise HTTPException(409, "Trader already running. Stop first.")
+    with _start_lock:
+        if _trader_instance["initializing"]:
+            raise HTTPException(409, "Trader is still initializing, please wait.")
+        if _trader_instance["trader"] is not None:
+            raise HTTPException(409, "Trader already running. Stop first.")
+        _trader_instance["initializing"] = True
+        _trader_instance["init_error"] = None
 
     api_key, api_secret = get_user_keys(user_id)
     if not api_key or not api_secret:
@@ -246,8 +250,6 @@ def trader_start(x_access_code: str = Header("")):
         raise HTTPException(400, "No API keys configured. Set them in Settings first.")
 
     db = get_db()
-    _trader_instance["initializing"] = True
-    _trader_instance["init_error"] = None
 
     def _init_trader():
         global _trader_instance, _telegram_bot
