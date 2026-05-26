@@ -6,7 +6,7 @@ import { getAccessCode } from "@/lib/api";
 
 export default function Header() {
   const pathname = usePathname();
-  const authorized = getAccessCode() === "1231";
+  const authorized = !!getAccessCode();
 
   return (
     <header className="bg-background border-b border-outline-variant flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop h-16 shrink-0 z-50">

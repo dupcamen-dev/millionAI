@@ -95,21 +95,19 @@ def get_balance(x_access_code: str = Header("")):
         positions = []
         try:
             api_key, api_secret = get_user_keys(user_id)
-            if not api_key:
-                api_key = os.getenv("API_KEY", "")
-                api_secret = os.getenv("API_SECRET", "")
-            if api_key:
-                raw_positions = t.binance.get_positions()
-                for p in raw_positions:
-                    amt = float(p.get("positionAmt", 0))
-                    positions.append({
-                        "symbol": p.get("symbol", ""),
-                        "side": "BUY" if amt > 0 else "SELL",
-                        "entry_price": float(p.get("entryPrice", 0)),
-                        "quantity": abs(amt),
-                        "leverage": int(float(p.get("leverage", 1))),
-                        "pnl": float(p.get("unRealizedProfit", 0)),
-                    })
+            if not api_key or not api_secret:
+                return {"equity": equity, "balance": equity, "positions": []}
+            raw_positions = t.binance.get_positions()
+            for p in raw_positions:
+                amt = float(p.get("positionAmt", 0))
+                positions.append({
+                    "symbol": p.get("symbol", ""),
+                    "side": "BUY" if amt > 0 else "SELL",
+                    "entry_price": float(p.get("entryPrice", 0)),
+                    "quantity": abs(amt),
+                    "leverage": int(float(p.get("leverage", 1))),
+                    "pnl": float(p.get("unRealizedProfit", 0)),
+                })
         except Exception:
             pass
         return {"equity": equity, "balance": equity, "positions": positions}
@@ -119,9 +117,8 @@ def get_balance(x_access_code: str = Header("")):
         return {"equity": cache["equity"], "balance": cache["equity"], "positions": cache["positions"]}
 
     api_key, api_secret = get_user_keys(user_id)
-    if not api_key:
-        api_key = os.getenv("API_KEY", "")
-        api_secret = os.getenv("API_SECRET", "")
+    if not api_key or not api_secret:
+        return {"equity": 0, "balance": 0, "positions": []}
     if api_key:
         try:
             from exchange.binance_rest import BinanceFuturesAPI, BinanceAPIError
@@ -184,10 +181,7 @@ def assets_screener(x_access_code: str = Header("")):
     from exchange.binance_rest import BinanceFuturesAPI, BinanceAPIError
     from exchange.screener import AssetScreener
     api_key, api_secret = get_user_keys(user_id)
-    if not api_key:
-        api_key = os.getenv("API_KEY", "")
-        api_secret = os.getenv("API_SECRET", "")
-    if not api_key:
+    if not api_key or not api_secret:
         return {"assets": []}
     try:
         api = BinanceFuturesAPI(api_key, api_secret)
@@ -273,9 +267,6 @@ def trader_start(x_access_code: str = Header("")):
 
     api_key, api_secret = get_user_keys(user_id)
     if not api_key or not api_secret:
-        api_key = os.getenv("API_KEY", "")
-        api_secret = os.getenv("API_SECRET", "")
-    if not api_key:
         _trader_instances[user_id]["initializing"] = False
         _trader_instances[user_id]["init_error"] = "No API keys configured. Set them in Settings first."
         raise HTTPException(400, "No API keys configured. Set them in Settings first.")

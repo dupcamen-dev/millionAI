@@ -16,7 +16,7 @@ export default function ApiConfigPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (getAccessCode() !== "1231") {
+    if (!getAccessCode()) {
       router.push("/access");
     } else {
       setAuthorized(true);
