@@ -1,6 +1,8 @@
 """Python ctypes wrapper for snn_trader.dll — Million Compiler generated C SNN."""
 import ctypes
 import os
+import platform
+
 import numpy as np
 
 _LIB = None
@@ -16,12 +18,13 @@ def _get_lib():
     if _LIB is not None:
         return _LIB
     lib_dir = os.path.dirname(os.path.abspath(__file__))
-    dll_path = os.path.join(lib_dir, "lib", "snn_trader.dll")
-    if not os.path.exists(dll_path):
-        dll_path = os.path.join(lib_dir, "lib", "libsnn_trader.so")
-    if not os.path.exists(dll_path):
-        raise FileNotFoundError(f"snn_trader library not found at {dll_path}")
-    _LIB = ctypes.CDLL(dll_path)
+    ext = ".dll" if platform.system() == "Windows" else ".so"
+    lib_path = os.path.join(lib_dir, "lib", f"snn_trader{ext}")
+    if not os.path.exists(lib_path):
+        lib_path = os.path.join(lib_dir, "lib", f"libsnn_trader{ext}")
+    if not os.path.exists(lib_path):
+        raise FileNotFoundError(f"snn_trader library not found ({lib_path})")
+    _LIB = ctypes.CDLL(lib_path)
     _setup()
     return _LIB
 
