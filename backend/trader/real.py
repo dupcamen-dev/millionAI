@@ -88,6 +88,9 @@ class RealTrader(BaseTrader):
 
     def _auto_select_symbol(self, top_n=5, backtest_top=2):
         """Run screener -> backtest top candidates -> pick best by risk_score."""
+        if getattr(self, '_selecting', False):
+            return
+        self._selecting = True
         try:
             self._log("SYS", "Scanning assets...")
             candidates = self.screener.scan(top_n=top_n)
@@ -151,6 +154,8 @@ class RealTrader(BaseTrader):
         except Exception as e:
             self._log("ERROR", f"Auto-select failed: {e}")
             self.binance.set_leverage(self.symbol, self.leverage)
+        finally:
+            self._selecting = False
 
     def _get_qty(self, price: float) -> float:
         self._load_lot_size()
@@ -206,9 +211,6 @@ class RealTrader(BaseTrader):
             self.pos = 0
             if e.code == RATE_LIMIT:
                 time.sleep(5)
-            # Try to re-select symbol if -2015 (key issue) or other perm errors
-            if self.auto_symbol and e.code == -2015:
-                self._auto_select_symbol()
         except Exception as e:
             self._log("ERROR", f"Entry failed: {e}")
             self.pos = 0
