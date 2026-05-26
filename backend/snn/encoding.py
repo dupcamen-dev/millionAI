@@ -1,32 +1,37 @@
 import math
 import numpy as np
 
-def arch_proj(i, j, l):
-    return float(((i * 13) ^ (j * 7) ^ (l * 5)) % 31 - 15) / 15.0
-
-def archive_unfold(nucleus, level=1):
-    N = len(nucleus)
-    unfolded = np.zeros(N * 4, dtype=np.float32)
-    for i in range(N * 4):
-        s = sum(nucleus[j] * arch_proj(i, j, level) for j in range(N))
-        unfolded[i] = math.tanh(s / N)
-    return unfolded
-
-def archive_compress(unfolded, out_size=64):
-    in_size = len(unfolded)
-    group = in_size // out_size
-    compressed = np.zeros(out_size, dtype=np.float32)
-    for i in range(out_size):
-        start = i * group
-        end = min(start + group, in_size)
-        compressed[i] = sum(unfolded[start:end]) / (end - start)
-    return compressed
-
-SENSORY = 8
 ARCHIVE_N = 64
+SENSORY = 8
 BUY_N = 8
 SELL_N = 8
 TOTAL_N = BUY_N + SELL_N
+
+_UNFOLD_CACHE = {}
+
+def _get_unfold_matrix(nucleus_size, level):
+    key = (nucleus_size, level)
+    if key not in _UNFOLD_CACHE:
+        N = nucleus_size
+        out_size = N * 4
+        i_idx = np.arange(out_size, dtype=np.int32).reshape(-1, 1)
+        j_idx = np.arange(N, dtype=np.int32).reshape(1, -1)
+        W = ((i_idx * 13) ^ (j_idx * 7) ^ (level * 5)) % 31 - 15
+        W = W.astype(np.float32) / 15.0
+        _UNFOLD_CACHE[key] = W
+    return _UNFOLD_CACHE[key]
+
+def archive_unfold(nucleus, level=1):
+    N = len(nucleus)
+    W = _get_unfold_matrix(N, level)
+    s = W @ nucleus
+    return np.tanh(s / float(N)).astype(np.float32)
+
+def archive_compress(unfolded, out_size=64):
+    in_size = len(unfolded)
+    group = max(in_size // out_size, 1)
+    reshaped = unfolded[:group * out_size].reshape(out_size, group)
+    return reshaped.mean(axis=1).astype(np.float32)
 
 def encode_ohlcv(o, h, l, c, v, vol_history, funding_rate=0.0):
     spread = max(h - l, 1e-8)

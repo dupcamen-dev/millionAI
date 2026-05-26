@@ -15,10 +15,10 @@ class RSTDPEngine:
         self.trades_total = 0
 
     def accumulate(self, eligibility, input_vec, output):
+        dt = output - 0.5
+        scale = dt * math.exp(-abs(dt))
         n = min(len(eligibility), len(input_vec))
-        for i in range(n):
-            dt = output - 0.5
-            eligibility[i] += input_vec[i] * dt * math.exp(-abs(dt))
+        eligibility[:n] += input_vec[:n] * scale
 
     def decay_trace(self, eligibility):
         eligibility *= self.decay

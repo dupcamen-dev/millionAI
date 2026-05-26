@@ -1,5 +1,6 @@
 """Quick SNN backtest for asset selection — runs on historical klines."""
 
+import gc
 import math
 
 import numpy as np
@@ -85,6 +86,7 @@ def quick_backtest(data, lr=0.01, tau=24.0, sl=0.05, tp=0.12, fee=0.002, use_mic
     wr = tw / max(tr, 1)
     risk_score = wr * avg_pnl * math.sqrt(max(tr, 1)) / max(std_pnl, 0.001)
     trained_weights = [n.nucleus.copy() for n in neurons]
+    gc.collect()
     return {
         "trades": tr,
         "wins": tw,
