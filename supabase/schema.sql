@@ -10,12 +10,14 @@ CREATE TABLE IF NOT EXISTS users (
   is_active BOOLEAN DEFAULT false
 );
 
--- Binance API keys (encrypted at rest)
+-- Binance API keys + Telegram config (encrypted at rest)
 CREATE TABLE IF NOT EXISTS api_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   api_key TEXT NOT NULL,
   api_secret TEXT NOT NULL,
+  telegram_bot_token TEXT DEFAULT '',
+  telegram_chat_id TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(user_id)
 );

@@ -6,6 +6,8 @@ import Link from "next/link";
 export default function ApiConfigPage() {
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
+  const [telegramToken, setTelegramToken] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
   const [saved, setSaved] = useState(false);
 
   const handleSave = (e: React.FormEvent) => {
@@ -13,6 +15,8 @@ export default function ApiConfigPage() {
     if (!apiKey || !apiSecret) return;
     localStorage.setItem("MILLION_API_KEY", apiKey);
     localStorage.setItem("MILLION_API_SECRET", apiSecret);
+    localStorage.setItem("MILLION_TELEGRAM_BOT_TOKEN", telegramToken);
+    localStorage.setItem("MILLION_TELEGRAM_CHAT_ID", telegramChatId);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -59,6 +63,32 @@ export default function ApiConfigPage() {
                   className="bg-black border border-outline-variant text-on-surface font-code-snippet text-code-snippet px-unit-4 py-unit-2 focus:border-primary-fixed-dim focus:outline-none transition-colors w-full"
                   placeholder="Enter your Binance API secret..."
                   type="password"
+                />
+              </div>
+
+              <div className="border-t border-outline-variant my-unit-4" />
+
+              <h2 className="font-label-caps text-label-caps text-primary-fixed-dim uppercase mb-unit-2">TELEGRAM_BOT</h2>
+
+              <div className="flex flex-col gap-unit-4">
+                <label className="font-label-caps text-label-caps text-outline uppercase">BOT_TOKEN</label>
+                <input
+                  value={telegramToken}
+                  onChange={(e) => setTelegramToken(e.target.value)}
+                  className="bg-black border border-outline-variant text-on-surface font-code-snippet text-code-snippet px-unit-4 py-unit-2 focus:border-primary-fixed-dim focus:outline-none transition-colors w-full"
+                  placeholder="Enter your Telegram bot token..."
+                  type="password"
+                />
+              </div>
+
+              <div className="flex flex-col gap-unit-4">
+                <label className="font-label-caps text-label-caps text-outline uppercase">CHAT_ID</label>
+                <input
+                  value={telegramChatId}
+                  onChange={(e) => setTelegramChatId(e.target.value)}
+                  className="bg-black border border-outline-variant text-on-surface font-code-snippet text-code-snippet px-unit-4 py-unit-2 focus:border-primary-fixed-dim focus:outline-none transition-colors w-full"
+                  placeholder="Enter your Telegram chat ID..."
+                  type="text"
                 />
               </div>
 
