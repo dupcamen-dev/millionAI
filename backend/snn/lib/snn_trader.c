@@ -507,3 +507,75 @@ EXPORT void snn_get_rstdp_state_live(float* lr, float* total_pnl, int* trades, i
     *trades = g_rstdp.trades;
     *wins = g_rstdp.wins;
 }
+
+/*
+ * Full state save/load — preserves neuron membrane + eligibility + RSTDP
+ * Layout per neuron (TOTAL_N times):
+ *   nucleus[NUCLEUS_SIZE], bias(1), potential(1), threshold(1), refractory(1),
+ *   refr_counter(1), output(1), eligibility[NUCLEUS_SIZE]
+ * Then RSTDP state:
+ *   lr(1), total_pnl(1), trades(1), wins(1), trades_total(1)
+ * Total floats = TOTAL_N * (NUCLEUS_SIZE + 6 + NUCLEUS_SIZE) + 5
+ *              = 16 * (64 + 6 + 64) + 5 = 16 * 134 + 5 = 2149
+ */
+
+#define STATE_PER_NEURON (NUCLEUS_SIZE + 6 + NUCLEUS_SIZE)  /* 134 */
+#define STATE_TOTAL (TOTAL_N * STATE_PER_NEURON + 5)        /* 2149 */
+
+EXPORT int snn_save_state(float* buf) {
+    int pos = 0;
+    for (int i = 0; i < TOTAL_N; i++) {
+        /* nucleus */
+        for (int j = 0; j < NUCLEUS_SIZE; j++) buf[pos + j] = g_neurons[i].nucleus[j];
+        pos += NUCLEUS_SIZE;
+        /* scalar state */
+        buf[pos++] = g_neurons[i].bias;
+        buf[pos++] = g_neurons[i].potential;
+        buf[pos++] = g_neurons[i].threshold;
+        buf[pos++] = g_neurons[i].refractory;
+        buf[pos++] = (float)g_neurons[i].refr_counter;
+        buf[pos++] = g_neurons[i].output;
+        /* eligibility */
+        for (int j = 0; j < NUCLEUS_SIZE; j++) buf[pos + j] = g_neurons[i].eligibility[j];
+        pos += NUCLEUS_SIZE;
+    }
+    /* RSTDP state */
+    buf[pos++] = g_rstdp.lr;
+    buf[pos++] = g_rstdp.total_pnl;
+    buf[pos++] = (float)g_rstdp.trades;
+    buf[pos++] = (float)g_rstdp.wins;
+    buf[pos++] = (float)g_rstdp.trades_total;
+    return pos;
+}
+
+EXPORT void snn_load_state(const float* buf, int load_eligibility, int load_membrane) {
+    int pos = 0;
+    for (int i = 0; i < TOTAL_N; i++) {
+        /* nucleus */
+        for (int j = 0; j < NUCLEUS_SIZE; j++) g_neurons[i].nucleus[j] = buf[pos + j];
+        pos += NUCLEUS_SIZE;
+        if (load_membrane) {
+            g_neurons[i].bias = buf[pos++];
+            g_neurons[i].potential = buf[pos++];
+            g_neurons[i].threshold = buf[pos++];
+            g_neurons[i].refractory = buf[pos++];
+            g_neurons[i].refr_counter = (int)buf[pos++];
+            g_neurons[i].output = buf[pos++];
+        } else {
+            pos += 6;
+        }
+        /* eligibility */
+        if (load_eligibility) {
+            for (int j = 0; j < NUCLEUS_SIZE; j++) g_neurons[i].eligibility[j] = buf[pos + j];
+        }
+        pos += NUCLEUS_SIZE;
+    }
+    /* RSTDP state */
+    if (load_eligibility) {
+        g_rstdp.lr = buf[pos++];
+        g_rstdp.total_pnl = buf[pos++];
+        g_rstdp.trades = (int)buf[pos++];
+        g_rstdp.wins = (int)buf[pos++];
+        g_rstdp.trades_total = (int)buf[pos++];
+    }
+}

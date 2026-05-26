@@ -118,14 +118,16 @@ class RealTrader(BaseTrader):
             best_risk = -999
             best_result = None
             warm_weights = {}
+            warm_states = {}
 
             if self.db and self.user_id:
                 for c in candidates[:backtest_top]:
                     try:
-                        saved = self.db.load_weights(self.user_id, c["symbol"])
-                        if saved and saved.get("weights"):
-                            warm_weights[c["symbol"]] = saved
-                            self._log("SYS", f"  Found saved weights for {c['symbol']} (risk={saved.get('risk_score', 0):.2f})")
+                        state = self.db.load_model_state(self.user_id, c["symbol"])
+                        if state and state.get("weights"):
+                            warm_weights[c["symbol"]] = state
+                            warm_states[c["symbol"]] = state
+                            self._log("SYS", f"  Found saved state for {c['symbol']} (risk={state.get('risk_score', 0):.2f}, trades={state.get('rstpd', {}).get('trades', 0)})")
                     except Exception:
                         pass
             backtest_list = candidates[:backtest_top]
@@ -181,14 +183,23 @@ class RealTrader(BaseTrader):
                     self._log("SYS", f"Loaded trained weights from backtest ({len(self.neurons)} neurons)")
                     if self.db and self.user_id:
                         try:
-                            weights = [n.nucleus.tolist() for n in self.neurons]
-                            self.db.save_weights(self.user_id, self.symbol, weights, self.leverage, risk)
-                            self._log("SYS", f"Saved weights for {self.symbol} to DB")
+                            state = self._c_snn.save_state() if self._use_c_backend() else None
+                            if state is None:
+                                weights_list = [n.nucleus.tolist() for n in self.neurons]
+                                state = {"weights": weights_list, "leverage": self.leverage,
+                                          "risk_score": risk, "eligibility": [], "membrane": [],
+                                          "rstpd": {}}
+                            else:
+                                state["leverage"] = self.leverage
+                                state["risk_score"] = risk
+                            self.db.save_model_state(self.user_id, self.symbol, state)
+                            self._log("SYS", f"Saved full model state for {self.symbol} to DB")
                         except Exception as ex:
-                            self._log("WARN", f"Failed to save weights: {ex}")
+                            self._log("WARN", f"Failed to save state: {ex}")
                 self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (risk={risk:.2f} | {best_result['trades']}t)")
-                # Init compiled C SNN with backtest weights
-                if self.init_c_snn():
+                # Init compiled C SNN with backtest weights + saved eligibility state
+                saved_state = warm_states.get(self.symbol)
+                if self.init_c_snn(loaded_state=saved_state):
                     self._log("SYS", "C SNN backend initialized (compiled from Million)")
             else:
                 self.leverage = 1

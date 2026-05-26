@@ -57,7 +57,7 @@ class BaseTrader:
     def _use_c_backend(self):
         return _NATIVE_SNN is not None and self._c_snn is not None
 
-    def init_c_snn(self, weights=None, lr=None, tau=None):
+    def init_c_snn(self, weights=None, loaded_state=None, lr=None, tau=None):
         if _NATIVE_SNN is None:
             return False
         if lr is None: lr = self.rstdp.lr
@@ -65,19 +65,34 @@ class BaseTrader:
         if weights is None and self.neurons:
             weights = [n.nucleus.tolist() for n in self.neurons]
         self._c_snn = _NATIVE_SNN(init_weights=weights, lr=lr, tau=tau)
+        if loaded_state and loaded_state.get("eligibility"):
+            self._c_snn.load_state(loaded_state, load_eligibility=True, load_membrane=False)
         return True
 
     def _sync_weights_from_c(self):
         if not self._use_c_backend():
             return
-        w = self._c_snn.get_weights()
+        state = self._c_snn.save_state()
+        w_np = np.array(state["weights"], dtype=np.float32)
         for i in range(TOTAL_N):
-            self.neurons[i].nucleus = w[i].copy()
-        state = self._c_snn.get_state()
-        self.rstdp.lr = state["lr"]
-        self.rstdp.total_pnl = state["total_pnl"]
-        self.rstdp.trades = state["trades"]
-        self.rstdp.wins = state["wins"]
+            self.neurons[i].nucleus = w_np[i].copy()
+        self.rstdp.lr = state["rstpd"]["lr"]
+        self.rstdp.total_pnl = state["rstpd"]["total_pnl"]
+        self.rstdp.trades = state["rstpd"]["trades"]
+        self.rstdp.wins = state["rstpd"]["wins"]
+        self._last_full_state = state
+
+    def _save_full_state_to_db(self):
+        if not hasattr(self, 'db') or not self.db or not self.user_id:
+            return
+        if self._use_c_backend():
+            state = self._c_snn.save_state()
+            state["leverage"] = self.leverage
+            state["risk_score"] = getattr(self, 'last_backtest_risk_score', 0.0)
+            try:
+                self.db.save_model_state(self.user_id, self.symbol, state)
+            except Exception as e:
+                print(f"[Base] Failed to save model state: {e}")
 
     def init_random(self):
         self.neurons = [TradingNeuron() for _ in range(TOTAL_N)]
@@ -208,6 +223,7 @@ class BaseTrader:
                     self.wins += 1
                 if use_c:
                     self._sync_weights_from_c()
+                    self._save_full_state_to_db()
                 side = "BUY" if self.pos == 1 else "SELL"
                 self.on_exit(side, c, levered_pnl, close_reason, ts_str)
                 self.pos = 0

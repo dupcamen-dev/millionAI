@@ -366,13 +366,11 @@ def trader_stop(x_access_code: str = Header("")):
     trader.save_config(CONFIG_PATH)
 
     db = get_db()
-    if db and user_id and hasattr(trader, 'neurons') and trader.neurons:
+    if db and user_id and hasattr(trader, '_save_full_state_to_db'):
         try:
-            weights = [n.nucleus.tolist() for n in trader.neurons]
-            risk_score = getattr(trader, 'last_backtest_risk_score', 0.0)
-            db.save_weights(user_id, trader.symbol, weights, trader.leverage, risk_score)
+            trader._save_full_state_to_db()
         except Exception as e:
-            print(f"[Server] Failed to save weights: {e}")
+            print(f"[Server] Failed to save model state: {e}")
 
     _trader_instances.pop(user_id, None)
 

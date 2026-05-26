@@ -53,6 +53,10 @@ def _setup():
         ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
     ]
     lib.snn_get_rstdp_state_live.restype = None
+    lib.snn_save_state.argtypes = [ctypes.POINTER(ctypes.c_float)]
+    lib.snn_save_state.restype = ctypes.c_int
+    lib.snn_load_state.argtypes = [ctypes.POINTER(ctypes.c_float), ctypes.c_int, ctypes.c_int]
+    lib.snn_load_state.restype = None
 
 
 class NativeSNN:
@@ -106,6 +110,66 @@ class NativeSNN:
                                           ctypes.byref(t), ctypes.byref(w))
         return {"lr": lr.value, "total_pnl": pnl.value,
                 "trades": t.value, "wins": w.value}
+
+    def save_state(self):
+        """Export full neuron + RSTDP state as dict (for persistence to DB)."""
+        buf = (ctypes.c_float * 2200)()
+        n = self.lib.snn_save_state(buf)
+        arr = np.array(buf[:n], dtype=np.float32)
+        weights_2d = []
+        eligibility_2d = []
+        membrane = []
+        pos = 0
+        for i in range(TOTAL_N):
+            weights_2d.append(arr[pos:pos + NUCLEUS_SIZE].tolist())
+            pos += NUCLEUS_SIZE
+            membrane.append({
+                "bias": float(arr[pos]), "potential": float(arr[pos + 1]),
+                "threshold": float(arr[pos + 2]), "refractory": float(arr[pos + 3]),
+                "refr_counter": int(arr[pos + 4]), "output": float(arr[pos + 5]),
+            })
+            pos += 6
+            eligibility_2d.append(arr[pos:pos + NUCLEUS_SIZE].tolist())
+            pos += NUCLEUS_SIZE
+        rstpd = {
+            "lr": float(arr[pos]),
+            "total_pnl": float(arr[pos + 1]),
+            "trades": int(arr[pos + 2]),
+            "wins": int(arr[pos + 3]),
+            "trades_total": int(arr[pos + 4]),
+        }
+        return {"weights": weights_2d, "membrane": membrane,
+                "eligibility": eligibility_2d, "rstpd": rstpd}
+
+    def load_state(self, saved, load_eligibility=True, load_membrane=True):
+        """Restore full neuron + RSTDP state from dict (saved via save_state)."""
+        buf = (ctypes.c_float * 2200)()
+        pos = 0
+        for i in range(TOTAL_N):
+            w = saved["weights"][i][:NUCLEUS_SIZE]
+            for v in w: buf[pos] = float(v); pos += 1
+            if "membrane" in saved and i < len(saved["membrane"]):
+                m = saved["membrane"][i]
+                buf[pos] = m.get("bias", 1.0); pos += 1
+                buf[pos] = m.get("potential", 0.0); pos += 1
+                buf[pos] = m.get("threshold", 0.5); pos += 1
+                buf[pos] = m.get("refractory", 0.0); pos += 1
+                buf[pos] = m.get("refr_counter", 0); pos += 1
+                buf[pos] = m.get("output", 0.0); pos += 1
+            else:
+                for _ in range(6): buf[pos] = 0.0; pos += 1
+            if load_eligibility and "eligibility" in saved and i < len(saved["eligibility"]):
+                for v in saved["eligibility"][i]: buf[pos] = float(v); pos += 1
+            else:
+                for _ in range(NUCLEUS_SIZE): buf[pos] = 0.0; pos += 1
+        rstpd = saved.get("rstpd", {})
+        buf[pos] = rstpd.get("lr", 0.01); pos += 1
+        buf[pos] = rstpd.get("total_pnl", 0.0); pos += 1
+        buf[pos] = rstpd.get("trades", 0); pos += 1
+        buf[pos] = rstpd.get("wins", 0); pos += 1
+        buf[pos] = rstpd.get("trades_total", 0); pos += 1
+        self.lib.snn_load_state(buf, ctypes.c_int(1 if load_eligibility else 0),
+                                ctypes.c_int(1 if load_membrane else 0))
 
 
 def quick_backtest(data, lr=0.01, tau=24.0, sl=0.05, tp=0.12,

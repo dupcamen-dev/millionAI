@@ -56,10 +56,19 @@ class SupabaseDB:
         self.db.table("logs").delete().eq("user_id", user_id).execute()
 
     def save_weights(self, user_id: str, symbol: str, weights: list, leverage: int = 1, risk_score: float = 0.0):
+        self.save_model_state(user_id, symbol, {"weights": weights, "leverage": leverage, "risk_score": risk_score})
+
+    def save_model_state(self, user_id: str, symbol: str, state: dict):
+        """Save full model state: weights + membrane + eligibility + RSTDP."""
         data = {
             "user_id": user_id, "symbol": symbol.upper(),
-            "weights": json.dumps(weights), "leverage": leverage,
-            "risk_score": risk_score, "updated_at": datetime.now(timezone.utc).isoformat(),
+            "weights": json.dumps(state.get("weights", [])),
+            "leverage": state.get("leverage", 1),
+            "risk_score": state.get("risk_score", 0.0),
+            "membrane": json.dumps(state.get("membrane", [])),
+            "eligibility": json.dumps(state.get("eligibility", [])),
+            "rstpd": json.dumps(state.get("rstpd", {})),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         try:
             self.db.table("model_weights").upsert(data, on_conflict="user_id,symbol").execute()
@@ -70,15 +79,24 @@ class SupabaseDB:
             with open(path, "w") as f:
                 json.dump(data, f)
 
-    def load_weights(self, user_id: str, symbol: str):
+    def load_model_state(self, user_id: str, symbol: str) -> dict | None:
+        """Load full model state from DB."""
         try:
             resp = self.db.table("model_weights").select("*").eq("user_id", user_id).eq("symbol", symbol.upper()).execute()
             if resp.data and len(resp.data) > 0:
                 row = resp.data[0]
+                def _parse(field):
+                    val = row.get(field)
+                    if isinstance(val, str):
+                        return json.loads(val)
+                    return val or {}
                 return {
-                    "weights": json.loads(row["weights"]) if isinstance(row["weights"], str) else row["weights"],
+                    "weights": _parse("weights"),
                     "leverage": row.get("leverage", 1),
-                    "risk_score": row.get("risk_score", 0),
+                    "risk_score": row.get("risk_score", 0.0),
+                    "membrane": _parse("membrane"),
+                    "eligibility": _parse("eligibility"),
+                    "rstpd": _parse("rstpd"),
                 }
         except Exception:
             pass
@@ -86,10 +104,5 @@ class SupabaseDB:
         path = os.path.join(fallback_dir, f"{user_id}_{symbol.upper()}.json")
         if os.path.exists(path):
             with open(path) as f:
-                data = json.load(f)
-            return {
-                "weights": json.loads(data["weights"]) if isinstance(data["weights"], str) else data["weights"],
-                "leverage": data.get("leverage", 1),
-                "risk_score": data.get("risk_score", 0),
-            }
+                return json.load(f)
         return None
