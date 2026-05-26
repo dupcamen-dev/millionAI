@@ -119,7 +119,7 @@ class NativeSNN:
 
     def save_state(self):
         """Export full neuron + RSTDP state as dict (for persistence to DB)."""
-        buf = (ctypes.c_float * 4400)()
+        buf = (ctypes.c_float * 6400)()
         n = self.lib.snn_save_state(buf)
         arr = np.array(buf[:n], dtype=np.float32)
         weights_2d = []
@@ -137,6 +137,10 @@ class NativeSNN:
             pos += 6
             eligibility_2d.append(arr[pos:pos + NUCLEUS_SIZE].tolist())
             pos += NUCLEUS_SIZE
+        velocity_2d = []
+        for i in range(TOTAL_N):
+            velocity_2d.append(arr[pos:pos + NUCLEUS_SIZE].tolist())
+            pos += NUCLEUS_SIZE
         rstpd = {
             "lr": float(arr[pos]),
             "total_pnl": float(arr[pos + 1]),
@@ -145,11 +149,11 @@ class NativeSNN:
             "trades_total": int(arr[pos + 4]),
         }
         return {"weights": weights_2d, "membrane": membrane,
-                "eligibility": eligibility_2d, "rstpd": rstpd}
+                "eligibility": eligibility_2d, "velocity": velocity_2d, "rstpd": rstpd}
 
     def load_state(self, saved, load_eligibility=True, load_membrane=True):
         """Restore full neuron + RSTDP state from dict (saved via save_state)."""
-        buf = (ctypes.c_float * 4400)()
+        buf = (ctypes.c_float * 6400)()
         pos = 0
         for i in range(TOTAL_N):
             w = saved["weights"][i][:NUCLEUS_SIZE]
@@ -168,6 +172,10 @@ class NativeSNN:
                 for v in saved["eligibility"][i]: buf[pos] = float(v); pos += 1
             else:
                 for _ in range(NUCLEUS_SIZE): buf[pos] = 0.0; pos += 1
+            if load_eligibility and "velocity" in saved and i < len(saved["velocity"]):
+                for v in saved["velocity"][i]: buf[pos] = float(v); pos += 1
+            else:
+                for _ in range(NUCLEUS_SIZE): buf[pos] = 0.0; pos += 1
         rstpd = saved.get("rstpd", {})
         buf[pos] = rstpd.get("lr", 0.01); pos += 1
         buf[pos] = rstpd.get("total_pnl", 0.0); pos += 1
@@ -178,7 +186,7 @@ class NativeSNN:
                                 ctypes.c_int(1 if load_membrane else 0))
 
 
-def quick_backtest(data, lr=0.01, tau=24.0, sl=0.05, tp=0.12,
+def quick_backtest(data, lr=0.01, tau=96.0, sl=0.05, tp=0.12,
                    use_micro=True, init_weights=None, leverage=1):
     """Run backtest using compiled C SNN via live API functions."""
     snn = NativeSNN(init_weights=init_weights, lr=lr, tau=tau)

@@ -38,7 +38,7 @@ def select_leverage(volatility_pct: float) -> int:
 
 class RealTrader(BaseTrader):
     def __init__(self, api_key, api_secret, symbol="SOLUSDT", leverage=1,
-                 config_file=None, lr=0.01, tau=24.0, sl=0.05, tp=0.12,
+                 config_file=None, lr=0.01, tau=96.0, sl=0.05, tp=0.12,
                  db=None, telegram_queue=None, auto_symbol=False):
         self.binance = BinanceFuturesAPI(api_key, api_secret)
         self.db = db
@@ -155,7 +155,10 @@ class RealTrader(BaseTrader):
                 init_weights = warm_weights.get(a["symbol"], {}).get("weights")
                 if init_weights:
                     self._log("SYS", f"  Warm-starting with saved weights")
-                r = quick_backtest(data, init_weights=init_weights, leverage=1)
+                vol = a["volatility"] / 100.0
+                eff_sl = max(0.05, vol * 0.3)
+                eff_tp = max(0.12, vol * 0.8)
+                r = quick_backtest(data, init_weights=init_weights, leverage=1, sl=eff_sl, tp=eff_tp)
                 self._log("SYS", f"  Backtest took {time.time()-t1:.1f}s")
                 risk = r["risk_score"]
                 self._log("SYS", f"  {r['trades']}t WR:{r['winrate']*100:.0f}% PnL:{r['total_pnl']*100:.1f}% risk:{risk:.2f}")
@@ -170,6 +173,13 @@ class RealTrader(BaseTrader):
                 best_result = None
 
             self.symbol = best_asset["symbol"]
+
+            # Adaptive SL/TP from screener volatility
+            vol = best_asset["volatility"] / 100.0
+            self.sl = max(0.05, vol * 0.3)
+            self.tp = max(0.12, vol * 0.8)
+            self.volatility_pct = best_asset["volatility"]
+            self._log("SYS", f"Adaptive SL/TP: {self.sl*100:.1f}% / {self.tp*100:.1f}% (vol={best_asset['volatility']:.1f}%)")
 
             if best_result and best_result["trades"] > 0:
                 risk = best_result["risk_score"]

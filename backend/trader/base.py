@@ -23,7 +23,7 @@ except (ImportError, FileNotFoundError, OSError) as e:
 INITIAL_EQUITY = 10.0
 
 class BaseTrader:
-    def __init__(self, symbol="SOLUSDT", leverage=1, config_file=None, lr=0.01, tau=24.0, sl=0.05, tp=0.12):
+    def __init__(self, symbol="SOLUSDT", leverage=1, config_file=None, lr=0.01, tau=96.0, sl=0.05, tp=0.12):
         self.symbol = symbol.upper()
         self.leverage = leverage
         self.neurons = []

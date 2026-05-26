@@ -44,6 +44,7 @@ typedef struct {
     int   refr_counter;
     float output;
     float eligibility[NUCLEUS_SIZE];
+    float velocity[NUCLEUS_SIZE];
 } Neuron;
 
 /* ==================== R-STDP Engine ==================== */
@@ -206,7 +207,8 @@ static void rstpd_micro_reward_one(Neuron* n, float prev_pnl, float curr_pnl) {
     float reward = tanhf(g_rstdp.reward_k * 0.3f * change);
     float lr_eff = g_rstdp.lr * g_rstdp.micro_lr_scale;
     for (int i = 0; i < NUCLEUS_SIZE; i++) {
-        n->nucleus[i] += lr_eff * n->eligibility[i] * reward;
+        n->velocity[i] = 0.9f * n->velocity[i] + lr_eff * n->eligibility[i] * reward;
+        n->nucleus[i] += n->velocity[i];
     }
 }
 
@@ -214,7 +216,8 @@ static void rstpd_commit_one(Neuron* n, float pnl_pct, int side) {
     float net = pnl_pct * (float)side - g_rstdp.fee_pct;
     float reward = tanhf(g_rstdp.reward_k * net);
     for (int i = 0; i < NUCLEUS_SIZE; i++) {
-        n->nucleus[i] += g_rstdp.lr * n->eligibility[i] * reward;
+        n->velocity[i] = 0.9f * n->velocity[i] + g_rstdp.lr * n->eligibility[i] * reward;
+        n->nucleus[i] += n->velocity[i];
         n->eligibility[i] = 0.0f;
     }
     g_rstdp.total_pnl += net;
@@ -275,6 +278,7 @@ EXPORT void snn_backtest(
         g_neurons[i].refr_counter = 0;
         g_neurons[i].output = 0.0f;
         memset(g_neurons[i].eligibility, 0, NUCLEUS_SIZE * sizeof(float));
+        memset(g_neurons[i].velocity, 0, NUCLEUS_SIZE * sizeof(float));
     }
 
     rstpd_init(&g_rstdp, lr, tau);
@@ -471,6 +475,7 @@ EXPORT void snn_init_live(const float* nucleus_data, float lr, float tau) {
         g_neurons[i].refr_counter = 0;
         g_neurons[i].output = 0.0f;
         memset(g_neurons[i].eligibility, 0, NUCLEUS_SIZE * sizeof(float));
+        memset(g_neurons[i].velocity, 0, NUCLEUS_SIZE * sizeof(float));
     }
     rstpd_init(&g_rstdp, lr, tau);
 }
@@ -562,15 +567,15 @@ EXPORT void snn_get_rstdp_state_live(float* lr, float* total_pnl, int* trades, i
  * Full state save/load — preserves neuron membrane + eligibility + RSTDP
  * Layout per neuron (TOTAL_N times):
  *   nucleus[NUCLEUS_SIZE], bias(1), potential(1), threshold(1), refractory(1),
- *   refr_counter(1), output(1), eligibility[NUCLEUS_SIZE]
+ *   refr_counter(1), output(1), eligibility[NUCLEUS_SIZE], velocity[NUCLEUS_SIZE]
  * Then RSTDP state:
  *   lr(1), total_pnl(1), trades(1), wins(1), trades_total(1)
- * Total floats = TOTAL_N * (NUCLEUS_SIZE + 6 + NUCLEUS_SIZE) + 5
- *              = 16 * (64 + 6 + 64) + 5 = 16 * 134 + 5 = 2149
+ * Total floats = TOTAL_N * (NUCLEUS_SIZE + 6 + NUCLEUS_SIZE + NUCLEUS_SIZE) + 5
+ *              = 32 * (64 + 6 + 64 + 64) + 5 = 32 * 198 + 5 = 6341
  */
 
-#define STATE_PER_NEURON (NUCLEUS_SIZE + 6 + NUCLEUS_SIZE)  /* 134 */
-#define STATE_TOTAL (TOTAL_N * STATE_PER_NEURON + 5)        /* 2149 */
+#define STATE_PER_NEURON (NUCLEUS_SIZE + 6 + NUCLEUS_SIZE + NUCLEUS_SIZE)  /* 198 */
+#define STATE_TOTAL (TOTAL_N * STATE_PER_NEURON + 5)                        /* 6341 */
 
 EXPORT int snn_save_state(float* buf) {
     int pos = 0;
@@ -587,6 +592,9 @@ EXPORT int snn_save_state(float* buf) {
         buf[pos++] = g_neurons[i].output;
         /* eligibility */
         for (int j = 0; j < NUCLEUS_SIZE; j++) buf[pos + j] = g_neurons[i].eligibility[j];
+        pos += NUCLEUS_SIZE;
+        /* velocity */
+        for (int j = 0; j < NUCLEUS_SIZE; j++) buf[pos + j] = g_neurons[i].velocity[j];
         pos += NUCLEUS_SIZE;
     }
     /* RSTDP state */
@@ -617,6 +625,11 @@ EXPORT void snn_load_state(const float* buf, int load_eligibility, int load_memb
         /* eligibility */
         if (load_eligibility) {
             for (int j = 0; j < NUCLEUS_SIZE; j++) g_neurons[i].eligibility[j] = buf[pos + j];
+        }
+        pos += NUCLEUS_SIZE;
+        /* velocity */
+        if (load_eligibility) {
+            for (int j = 0; j < NUCLEUS_SIZE; j++) g_neurons[i].velocity[j] = buf[pos + j];
         }
         pos += NUCLEUS_SIZE;
     }
