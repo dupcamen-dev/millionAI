@@ -21,7 +21,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (getAccessCode() !== "1231") {
+    if (!getAccessCode()) {
       router.push("/access");
     } else {
       setAuthorized(true);
