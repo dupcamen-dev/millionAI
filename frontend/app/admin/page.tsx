@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { apiGet, BalanceData } from "@/lib/api";
+import { apiGet, apiPost, BalanceData, TraderStatus, TraderStartResult } from "@/lib/api";
 
 interface Log {
   time: string;
@@ -13,6 +13,9 @@ export default function TerminalPage() {
   const [equity, setEquity] = useState(0);
   const [balance, setBalance] = useState(0);
   const [positions, setPositions] = useState<BalanceData["positions"]>([]);
+  const [traderStatus, setTraderStatus] = useState<TraderStatus | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [logs, setLogs] = useState<Log[]>([
     { time: new Date().toLocaleTimeString(), text: "Connecting to API...", type: "sys" },
   ]);
@@ -30,15 +33,47 @@ export default function TerminalPage() {
         setEquity(data.equity);
         setBalance(data.balance);
         setPositions(data.positions);
-        addLog("ok", `Connected. Balance: $${data.balance.toFixed(2)}`);
       } catch {
         addLog("err", "Failed to load balance from API");
       }
     };
+    const loadStatus = async () => {
+      try {
+        const s = await apiGet<TraderStatus>("/api/v1/trader/status");
+        setTraderStatus(s);
+      } catch {}
+    };
     load();
-    const interval = setInterval(load, 30000);
+    loadStatus();
+    const interval = setInterval(() => { load(); loadStatus(); }, 15000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleStart = async () => {
+    setStarting(true);
+    addLog("sys", "Starting trader...");
+    try {
+      const r = await apiPost<TraderStartResult>("/api/v1/trader/start");
+      addLog("ok", `Trader started: ${r.symbol} ${r.leverage}x balance=$${r.balance}`);
+      setTraderStatus({ running: true, symbol: r.symbol, leverage: r.leverage, equity: r.balance, candles: 0, trades: 0, wins: 0 });
+    } catch (e: any) {
+      addLog("err", `Start failed: ${e.message}`);
+    }
+    setStarting(false);
+  };
+
+  const handleStop = async () => {
+    setStopping(true);
+    addLog("sys", "Stopping trader & closing positions...");
+    try {
+      const r = await apiPost<{ status: string; trades: number; pnl_pct: number }>("/api/v1/trader/stop");
+      addLog("ok", `Trader stopped. Trades: ${r.trades} PnL: ${r.pnl_pct}%`);
+      setTraderStatus(null);
+    } catch (e: any) {
+      addLog("err", `Stop failed: ${e.message}`);
+    }
+    setStopping(false);
+  };
 
   const handleCommand = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,9 +83,10 @@ export default function TerminalPage() {
     switch (cmd) {
       case "/status":
         addLog("sys", `Equity: $${equity.toFixed(2)} | Balance: $${balance.toFixed(2)}`);
+        if (traderStatus?.running) addLog("sys", `Trader: ${traderStatus.symbol} ${traderStatus.leverage}x | Candles: ${traderStatus.candles} | Trades: ${traderStatus.trades}`);
         break;
       case "/help":
-        addLog("sys", "Commands: /status, /summary, /help");
+        addLog("sys", "Commands: /status, /positions, /help");
         break;
       case "/positions":
         if (positions.length === 0) addLog("sys", "No open positions");
@@ -74,19 +110,49 @@ export default function TerminalPage() {
   return (
     <>
       <div className="border-b border-surface-variant pb-unit-2 flex justify-between items-end">
-        <div>
-          <h1 className="font-headline-lg text-headline-lg text-on-surface uppercase">TERMINAL</h1>
-          <p className="font-code-snippet text-code-snippet text-outline mt-unit-1">&gt; SYS.STATUS: OPTIMAL</p>
+        <div className="flex items-end gap-unit-4">
+          <div>
+            <h1 className="font-headline-lg text-headline-lg text-on-surface uppercase">TERMINAL</h1>
+            <p className="font-code-snippet text-code-snippet text-outline mt-unit-1">
+              &gt; {traderStatus?.running ? `TRADING ${traderStatus.symbol} ${traderStatus.leverage}x` : "SYS.IDLE"}
+            </p>
+          </div>
+          {traderStatus?.running && (
+            <div className="font-label-caps text-label-caps text-primary-fixed-dim border border-primary-fixed-dim px-unit-2 py-unit-1 animate-pulse uppercase">
+              LIVE
+            </div>
+          )}
         </div>
-        <div className="font-label-caps text-label-caps text-primary-fixed-dim border border-primary-fixed-dim px-unit-2 py-unit-1 animate-pulse uppercase">
-          LIVE
+        <div className="flex gap-unit-2">
+          <button
+            onClick={handleStart}
+            disabled={starting || traderStatus?.running}
+            className={`font-label-caps text-label-caps px-unit-4 py-unit-2 border transition-colors uppercase ${
+              traderStatus?.running
+                ? "border-outline-variant text-outline cursor-not-allowed"
+                : "border-primary-fixed-dim text-primary-fixed-dim hover:bg-primary-fixed-dim hover:text-on-primary"
+            }`}
+          >
+            {starting ? "[ STARTING ]" : "[ START ]"}
+          </button>
+          <button
+            onClick={handleStop}
+            disabled={stopping || !traderStatus?.running}
+            className={`font-label-caps text-label-caps px-unit-4 py-unit-2 border transition-colors uppercase ${
+              !traderStatus?.running
+                ? "border-outline-variant text-outline cursor-not-allowed"
+                : "border-error text-error hover:bg-error hover:text-on-error"
+            }`}
+          >
+            {stopping ? "[ STOPPING ]" : "[ STOP ]"}
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-gutter">
         <div className="border border-surface-variant p-unit-4 bg-background hover:border-primary-fixed-dim transition-colors group relative">
           <div className="absolute top-0 right-0 w-2 h-2 bg-primary-fixed-dim m-unit-1 opacity-50 group-hover:opacity-100 transition-opacity" />
-          <div className="font-label-caps text-label-caps text-outline mb-unit-2 uppercase">Total Balance (Futures)</div>
+          <div className="font-label-caps text-label-caps text-outline mb-unit-2 uppercase">Balance</div>
           <div className="font-display text-display text-primary-fixed-dim">${balance.toFixed(2)}</div>
         </div>
         <div className="border border-surface-variant p-unit-4 bg-background hover:border-primary-fixed-dim transition-colors group relative">
@@ -98,9 +164,17 @@ export default function TerminalPage() {
           <div className="absolute top-0 right-0 w-2 h-2 bg-primary-fixed-dim m-unit-1 opacity-50 group-hover:opacity-100 transition-opacity" />
           <div className="font-label-caps text-label-caps text-outline mb-unit-2 uppercase">Unrealized PnL</div>
           <div className="font-display text-display text-primary-fixed-dim">${totalPnl.toFixed(2)}</div>
-          <div className="font-code-snippet text-code-snippet text-on-surface-variant mt-unit-2 flex items-center gap-unit-1">
-            <span className="text-outline">~</span>
-            Active Positions: {positions.length}
+        </div>
+        <div className="border border-surface-variant p-unit-4 bg-background hover:border-primary-fixed-dim transition-colors group relative">
+          <div className="absolute top-0 right-0 w-2 h-2 bg-primary-fixed-dim m-unit-1 opacity-50 group-hover:opacity-100 transition-opacity" />
+          <div className="font-label-caps text-label-caps text-outline mb-unit-2 uppercase">Trader</div>
+          <div className="font-display text-display" style={{ fontSize: "1.4rem", color: traderStatus?.running ? "#28a745" : "#666" }}>
+            {traderStatus?.running ? "RUNNING" : "STOPPED"}
+          </div>
+          <div className="font-code-snippet text-code-snippet text-on-surface-variant mt-unit-2">
+            {traderStatus?.running
+              ? `${traderStatus.symbol} ${traderStatus.leverage}x | Candles: ${traderStatus.candles}`
+              : "No active trader"}
           </div>
         </div>
       </div>

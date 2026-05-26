@@ -71,3 +71,20 @@ export interface ApiKeysData {
   telegram_bot_token: string;
   telegram_chat_id: string;
 }
+
+export interface TraderStatus {
+  running: boolean;
+  symbol: string;
+  leverage: number;
+  equity: number;
+  candles: number;
+  trades: number;
+  wins: number;
+}
+
+export interface TraderStartResult {
+  status: string;
+  symbol: string;
+  leverage: number;
+  balance: number;
+}
