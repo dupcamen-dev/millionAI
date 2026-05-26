@@ -66,15 +66,13 @@ export default function TerminalPage() {
   }, [addLog]);
 
   // Poll server logs and merge into local log stream
-  // Skip first poll — don't replay old Supabase logs
+  // lastLogId = -1 means "skip display, just record current max id"
   const [lastLogId, setLastLogId] = useState(-1);
-  const isFirstPoll = useRef(true);
   useEffect(() => {
     const poll = async () => {
       try {
         const data = await apiGet<LogsData>(`/api/v1/logs?limit=50`);
-        if (isFirstPoll.current) {
-          isFirstPoll.current = false;
+        if (lastLogId === -1) {
           if (data.logs.length > 0) {
             setLastLogId(data.logs[data.logs.length - 1].id);
           } else {
@@ -127,7 +125,6 @@ export default function TerminalPage() {
       await apiDelete("/api/v1/logs");
       setLogs([]);
       setLastLogId(-1);
-      isFirstPoll.current = true;
     } catch (e: any) {
       addLog("err", `Clear logs failed: ${e.message}`);
     }
