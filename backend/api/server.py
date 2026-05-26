@@ -77,9 +77,23 @@ def auth_verify(x_access_code: str = Header("")):
     return {"valid": True, "user_id": user_id}
 
 # ── Balance / Positions ───────────────────────────────────────────────
+_balance_cache = {"equity": 0.0, "positions": [], "ts": 0.0}
+
 @app.get("/api/v1/balance")
 def get_balance(x_access_code: str = Header("")):
+    global _balance_cache
     user_id = verify_access(x_access_code)
+    now = time.time()
+
+    # If trader is running, use its live equity
+    if _trader_instance["trader"] is not None and not _trader_instance["initializing"]:
+        t = _trader_instance["trader"]
+        return {"equity": round(t.equity, 2), "balance": round(t.equity, 2), "positions": []}
+
+    # Return cached balance if fresh (< 30s)
+    if now - _balance_cache["ts"] < 30 and _balance_cache["ts"] > 0:
+        return {"equity": _balance_cache["equity"], "balance": _balance_cache["equity"], "positions": _balance_cache["positions"]}
+
     api_key, api_secret = get_user_keys(user_id)
     if not api_key:
         api_key = os.getenv("API_KEY", "")
@@ -105,19 +119,12 @@ def get_balance(x_access_code: str = Header("")):
                     })
             except Exception:
                 positions = []
+            _balance_cache = {"equity": equity, "positions": positions, "ts": now}
             return {"equity": equity, "balance": equity, "positions": positions}
         except Exception:
             pass
 
-    db = get_db()
-    if not db:
-        return {"equity": 0.0, "balance": 0.0, "positions": []}
-    equity_data = db.db.table("equity_curve").select("*").eq("user_id", user_id).order("timestamp", desc=True).limit(1).execute()
-    equity = equity_data.data[0]["equity"] if equity_data.data else 0.0
-    balance = equity_data.data[0]["balance"] if equity_data.data else 0.0
-    trades_data = db.db.table("trades").select("*").eq("user_id", user_id).filter("closed_at", "is", "null").execute()
-    positions = trades_data.data if trades_data.data else []
-    return {"equity": equity, "balance": balance, "positions": positions}
+    return {"equity": _balance_cache["equity"], "balance": _balance_cache["equity"], "positions": _balance_cache["positions"]}
 
 # ── Logs ──────────────────────────────────────────────────────────────
 @app.get("/api/v1/logs")

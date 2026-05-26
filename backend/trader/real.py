@@ -86,9 +86,10 @@ class RealTrader(BaseTrader):
             self._log("ERROR", f"Init error: {e}")
             raise
 
-    def _auto_select_symbol(self, top_n=5, backtest_top=3):
-        """Run screener → backtest top candidates → pick best by risk_score."""
+    def _auto_select_symbol(self, top_n=5, backtest_top=2):
+        """Run screener -> backtest top candidates -> pick best by risk_score."""
         try:
+            self._log("SYS", "Scanning assets...")
             candidates = self.screener.scan(top_n=top_n)
             self.last_screener_candidates = candidates or []
             if not candidates:
@@ -97,29 +98,28 @@ class RealTrader(BaseTrader):
                 return
 
             for c in candidates:
-                self._log("SYS", f"Screener: {c['symbol']} @ ${c['price']:.4f} vol={c['volatility']:.2f}% score={c['score']:.4f}")
+                self._log("SYS", f"  {c['symbol']} @ ${c['price']:.4f} vol={c['volatility']:.2f}% score={c['score']:.2f}")
 
             best_asset = None
             best_risk = -999
             best_result = None
             backtest_list = candidates[:backtest_top]
+            total = len(backtest_list)
 
-            for a in backtest_list:
-                self._log("SYS", f"Backtesting {a['symbol']} with 1000 candles...")
-                raw = self.binance.get_klines(a["symbol"], "5m", 1000)
-                if not raw or len(raw) < 200:
-                    self._log("WARN", f"Insufficient data for {a['symbol']}, skipping")
+            for idx, a in enumerate(backtest_list, 1):
+                self._log("SYS", f"Backtest {idx}/{total}: {a['symbol']}...")
+                raw = self.binance.get_klines(a["symbol"], "5m", 500)
+                if not raw or len(raw) < 100:
+                    self._log("WARN", f"  skip — insufficient data ({len(raw) if raw else 0} candles)")
                     continue
                 data = np.zeros((len(raw), 5), dtype=np.float32)
                 for i, k in enumerate(raw):
                     data[i] = [float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])]
                 r = quick_backtest(data)
-                if r["trades"] < 3:
-                    self._log("WARN", f"Backtest {a['symbol']}: only {r['trades']} trades, skipping")
-                    continue
-                self._log("SYS", f"  -> {r['trades']}t WR:{r['winrate']*100:.1f}% avg:{r['avg_pnl']*100:.2f}% risk:{r['risk_score']:.2f}")
-                if r["risk_score"] > best_risk:
-                    best_risk = r["risk_score"]
+                risk = r["risk_score"]
+                self._log("SYS", f"  {r['trades']}t WR:{r['winrate']*100:.0f}% PnL:{r['total_pnl']*100:.1f}% risk:{risk:.2f}")
+                if risk > best_risk:
+                    best_risk = risk
                     best_asset = a
                     best_result = r
 
@@ -130,7 +130,7 @@ class RealTrader(BaseTrader):
 
             self.symbol = best_asset["symbol"]
 
-            if best_result:
+            if best_result and best_result["trades"] > 0:
                 risk = best_result["risk_score"]
                 self.leverage = max(1, min(5, round(1 + risk * 2)))
                 self.binance.set_leverage(self.symbol, self.leverage)
@@ -138,7 +138,7 @@ class RealTrader(BaseTrader):
                     from snn.neuron import TradingNeuron
                     self.neurons = [TradingNeuron(nucleus=w) for w in best_result["weights"]]
                     self._log("SYS", f"Loaded trained weights from backtest ({len(self.neurons)} neurons)")
-                self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (risk_score={risk:.2f})")
+                self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (risk={risk:.2f} | {best_result['trades']}t)")
             else:
                 self.leverage = 5
                 self.binance.set_leverage(self.symbol, self.leverage)

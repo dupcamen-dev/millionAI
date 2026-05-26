@@ -61,8 +61,9 @@ export default function TerminalPage() {
     };
     load();
     loadStatus();
-    const interval = setInterval(() => { load(); loadStatus(); }, 5000);
-    return () => clearInterval(interval);
+    const balanceInterval = setInterval(load, 15000);
+    const statusInterval = setInterval(loadStatus, 5000);
+    return () => { clearInterval(balanceInterval); clearInterval(statusInterval); };
   }, [addLog]);
 
   // Poll server logs and merge into local log stream
