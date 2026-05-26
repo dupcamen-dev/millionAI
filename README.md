@@ -155,6 +155,30 @@ million [-h] [-V] [-q] [--backend auto|c|llvm] input [output]
 | `llvm` | LLVM IR + verify (+ optional O3 passes) |
 | `auto` | LLVM якщо встановлено `llvmlite`, інакше C |
 
+## Million Terminal (Frontend)
+
+`frontend/` — Next.js веб-дашборд для SNN Crypto Trader.
+
+**Сторінки:**
+- `/` — Landing page з terminal-анімацією
+- `/auth` — Вхід по access code
+- `/dashboard` — Торговий дашборд (equity, позиції, логи)
+- `/settings/api` — Налаштування Binance API ключів
+
+**Stack:** Next.js 15, TypeScript, Tailwind CSS 3, Supabase, Recharts.
+
+```bash
+cd frontend
+npm install
+npm run dev    # http://localhost:3000
+```
+
+## Supabase Schema
+
+`supabase/schema.sql` — PostgreSQL схема для персистентності:
+- `users`, `api_keys`, `trades`, `equity_curve`, `logs`
+- Row Level Security, індекси, політики доступу
+
 ## Ліцензія
 
 MIT — див. [LICENSE](LICENSE).

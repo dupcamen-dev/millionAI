@@ -24,3 +24,12 @@ data/*.bin
 data/*.npz
 data/*.gz
 data/fashion_gz/
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env
+frontend/.env.local
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
