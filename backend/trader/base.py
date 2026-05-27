@@ -44,7 +44,7 @@ class BaseTrader:
         self.equity_curve = []
         self.candle_count = 0
         self.entry_candle = 0
-        self.max_hold = 24
+        self.max_hold = 12
         self.epsilon = 0.15
         self.last_candle_time = time.time()
         self._c_snn = None  # NativeSNN instance (compiled C SNN)
@@ -152,7 +152,7 @@ class BaseTrader:
 
         # No-trade streak: gradually become more aggressive
         if self._no_trade_streak > 20 and self._no_trade_streak % 20 == 0:
-            self._base_threshold = max(0.25, self._base_threshold - 0.05)
+            self._base_threshold = max(0.35, self._base_threshold - 0.05)
             self.epsilon = min(0.3, self.epsilon + 0.05)
             log_fn("SYS", f"Evo: no-trade streak={self._no_trade_streak}, th->{self._base_threshold:.2f} eps->{self.epsilon:.2f}")
 
@@ -246,7 +246,7 @@ class BaseTrader:
             if avg > 0.50:
                 self._base_threshold = min(1.0, self._base_threshold + 0.005)
             elif avg < 0.10:
-                self._base_threshold = max(0.25, self._base_threshold - 0.005)
+                self._base_threshold = max(0.35, self._base_threshold - 0.005)
 
         # ── Score: top-3 weighted ──
         buy_sorted = sorted(buy_raw, reverse=True)
