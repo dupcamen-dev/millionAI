@@ -183,7 +183,6 @@ class RealTrader(BaseTrader):
             vol = best_asset["volatility"] / 100.0
             self.sl = min(0.03, max(0.02, vol * 0.3))
             self.tp = min(0.08, max(0.06, vol * 0.5))
-            self.tp = max(0.12, vol * 0.8)
             self.volatility_pct = best_asset["volatility"]
             self._log("SYS", f"Adaptive SL/TP: {self.sl*100:.1f}% / {self.tp*100:.1f}% (vol={best_asset['volatility']:.1f}%)")
 

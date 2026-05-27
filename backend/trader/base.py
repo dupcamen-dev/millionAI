@@ -465,6 +465,33 @@ class BaseTrader:
     def on_exit(self, side, price, pnl_pct, reason, ts_str):
         print(f"{ts_str} {reason} @ ${price:.6f} PnL={pnl_pct*100:.2f}% Eq=${self.equity:.4f}")
 
+    def check_instant_sl(self, current_price):
+        """Check and trigger SL on every price tick (open candle)."""
+        if self.pos == 0 or self.entry_price <= 0:
+            return
+        pnl_raw = (current_price - self.entry_price) / self.entry_price
+        curr_levered = (pnl_raw if self.pos == 1 else -pnl_raw) * self.leverage
+        if self.sl > 0 and curr_levered <= -self.sl:
+            use_c = self._use_c_backend()
+            if use_c:
+                self._c_snn.commit(pnl_raw, self.pos)
+            self.equity *= (1.0 + curr_levered)
+            self.rstdp.commit_stats(curr_levered)
+            self.trades += 1
+            self.total_pnl += curr_levered
+            if curr_levered > 0:
+                self.wins += 1
+            if use_c:
+                self._sync_weights_from_c()
+                self._save_full_state_to_db()
+            side = "BUY" if self.pos == 1 else "SELL"
+            ts_str = time.strftime("%Y-%m-%d %H:%M")
+            log_fn = getattr(self, '_log', print)
+            log_fn("EXEC", f"INSTANT SL @ ${current_price:.4f} PnL={curr_levered*100:.2f}% Eq=${self.equity:.4f}")
+            self.on_exit(side, current_price, curr_levered, "SL-INSTANT", ts_str)
+            self.pos = 0
+            self._has_prev_pnl = False
+
     def summary(self):
         wr = 100.0 * self.wins / self.trades if self.trades else 0
         print(f"\n=== TRADING SUMMARY ===")

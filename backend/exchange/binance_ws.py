@@ -8,7 +8,7 @@ import websocket
 class BinanceWSListener:
     """Multi-stream WebSocket: kline (primary) + depth + trades.  Direct method callbacks."""
 
-    def __init__(self, on_candle, on_error=None, reconnect_delay=5, log_fn=None):
+    def __init__(self, on_candle, on_error=None, reconnect_delay=5, log_fn=None, on_sl_check=None):
         self.on_candle_cb = on_candle
         self.on_error_cb = on_error
         self.reconnect_delay = reconnect_delay
@@ -16,6 +16,7 @@ class BinanceWSListener:
         self._last_open_log_ts = 0
         self._lock = threading.Lock()
         self._log = log_fn
+        self._on_sl_check = on_sl_check  # instant SL check callback
 
         # Trade accumulator per 5-min window
         self._trade_buy_vol = 0.0
@@ -50,6 +51,14 @@ class BinanceWSListener:
                 self._slog(f"Kline#{self._kline_msg_n}: {preview}")
             k = data.get("k", {})
             if not k.get("x", False):
+                # Instant SL check on every price update
+                if self._on_sl_check:
+                    try:
+                        c = float(k.get("c", 0))
+                        if c > 0:
+                            self._on_sl_check(c)
+                    except Exception:
+                        pass
                 now = time.time()
                 if now - self._last_open_log_ts > 300:
                     self._last_open_log_ts = now
