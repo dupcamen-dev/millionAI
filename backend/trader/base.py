@@ -110,8 +110,6 @@ class BaseTrader:
 
     def init_random(self):
         self.neurons = [TradingNeuron() for _ in range(TOTAL_N)]
-        for i in range(BUY_N, TOTAL_N):
-            self.neurons[i].bias = 0.0  # SELL neurons: lower bias for BUY/SELL separation
 
     def load_config(self, path):
         with open(path) as f:

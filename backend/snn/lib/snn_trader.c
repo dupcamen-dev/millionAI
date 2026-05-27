@@ -339,7 +339,7 @@ EXPORT void snn_backtest(
     }
 
     for (int i = 0; i < TOTAL_N; i++) {
-        g_neurons[i].bias = (i < BUY_N) ? 0.3f : 0.0f;
+        g_neurons[i].bias = 0.3f;  /* equal BUY/SELL, R-STDP differentiates */
         g_neurons[i].potential = 0.0f;
         g_neurons[i].threshold = 0.5f;
         g_neurons[i].refractory = 0.0f;
@@ -537,7 +537,7 @@ EXPORT void snn_init_live(const float* nucleus_data, float lr, float tau) {
     }
 
     for (int i = 0; i < TOTAL_N; i++) {
-        g_neurons[i].bias = (i < BUY_N) ? 0.3f : 0.0f;
+        g_neurons[i].bias = 0.3f;  /* equal BUY/SELL, R-STDP differentiates */
         g_neurons[i].potential = 0.0f;
         g_neurons[i].threshold = 0.5f;
         g_neurons[i].refractory = 0.0f;
