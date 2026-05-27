@@ -254,10 +254,12 @@ static void rstpd_micro_reward_one(Neuron* n, float prev_pnl, float curr_pnl) {
     float reward = tanhf(g_rstdp.reward_k * 0.3f * change);
     float lr_eff = g_rstdp.lr * g_rstdp.micro_lr_scale;
     for (int i = 0; i < NUCLEUS_SIZE; i++) {
-        n->velocity[i] = 0.9f * n->velocity[i] + lr_eff * n->eligibility[i] * reward;
-        n->nucleus[i] += n->velocity[i];
+n->velocity[i] = 0.9f * n->velocity[i] + lr_eff * n->eligibility[i] * reward;
+            n->nucleus[i] += n->velocity[i];
+            if (n->nucleus[i] > 10.0f) n->nucleus[i] = 10.0f;
+            if (n->nucleus[i] < -10.0f) n->nucleus[i] = -10.0f;
+        }
     }
-}
 
 static void rstpd_commit_one(Neuron* n, float pnl_pct, int side) {
     float net = pnl_pct * (float)side - g_rstdp.fee_pct;
@@ -696,7 +698,11 @@ EXPORT void snn_load_state(const float* buf, int load_eligibility, int load_memb
     int pos = 0;
     for (int i = 0; i < TOTAL_N; i++) {
         /* nucleus */
-        for (int j = 0; j < NUCLEUS_SIZE; j++) g_neurons[i].nucleus[j] = buf[pos + j];
+        for (int j = 0; j < NUCLEUS_SIZE; j++) {
+            g_neurons[i].nucleus[j] = buf[pos + j];
+            if (g_neurons[i].nucleus[j] > 10.0f) g_neurons[i].nucleus[j] = 10.0f;
+            if (g_neurons[i].nucleus[j] < -10.0f) g_neurons[i].nucleus[j] = -10.0f;
+        }
         pos += NUCLEUS_SIZE;
         if (load_membrane) {
             g_neurons[i].bias = buf[pos++];
