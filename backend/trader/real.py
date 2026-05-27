@@ -174,6 +174,11 @@ class RealTrader(BaseTrader):
 
             self.symbol = best_asset["symbol"]
 
+            # Reload lot size for the new symbol (invalidate cache)
+            self._lot_step = None
+            self._lot_min_qty = None
+            self._load_lot_size()
+
             # Adaptive SL/TP from screener volatility
             vol = best_asset["volatility"] / 100.0
             self.sl = max(0.05, vol * 0.3)
@@ -216,9 +221,6 @@ class RealTrader(BaseTrader):
                 self._log("SYS", f"Selected: {self.symbol} {self.leverage}x (fallback)")
 
             print(f"[Screener] Selected {self.symbol} @ ${best_asset['price']:.4f} -> {self.leverage}x")
-            self._lot_step = None
-            self._lot_min_qty = None
-            self._load_lot_size()
         except Exception as e:
             self._log("ERROR", f"Auto-select failed: {e}")
             self.binance.set_leverage(self.symbol, self.leverage)

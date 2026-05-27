@@ -20,7 +20,11 @@ class BinanceWSListener:
         self._trade_buy_vol = 0.0
         self._trade_sell_vol = 0.0
         self._trade_count = 0
-        self._trades_sizes = []  # last N trade sizes for large trade detection
+        self._trades_sizes = []
+
+        # Received flags for first-data logging
+        self._depth_received = False
+        self._first_trade_logged = False
 
         # Latest order book snapshot
         self._order_book = None
@@ -90,6 +94,9 @@ class BinanceWSListener:
             asks = data.get("asks", [])
             if not bids or not asks:
                 return
+            if not self._depth_received:
+                self._depth_received = True
+                self._log and self._log("SYS", f"Depth data: bid={bids[0][0]} ask={asks[0][0]} levels=5")
             bid_qty = sum(float(b[1]) for b in bids[:5])
             ask_qty = sum(float(a[1]) for a in asks[:5])
             best_bid = float(bids[0][0]) if bids else 0
@@ -114,11 +121,12 @@ class BinanceWSListener:
         url = f"wss://fstream.binance.com/ws/{self._symbol.lower()}@depth5@500ms"
         self._depth_ws = websocket.WebSocketApp(
             url,
+            on_open=lambda ws: self._log and self._log("SYS", f"WS depth connected: {self._symbol}@depth5"),
             on_message=self._on_depth_msg,
             on_error=self._on_depth_error,
             on_close=self._on_depth_close,
         )
-        sys.stdout.write(f"WS depth: {self._symbol}@depth5\n")
+        self._log and self._log("SYS", f"WS depth starting: {self._symbol}@depth5")
         self._depth_ws.run_forever()
 
     # ==================== Trade stream (optional) ====================
@@ -126,6 +134,9 @@ class BinanceWSListener:
     def _on_trade_msg(self, ws, msg):
         try:
             data = json.loads(msg)
+            if not self._first_trade_logged:
+                self._first_trade_logged = True
+                self._log and self._log("SYS", f"Trades stream active: first trade received")
             price = float(data.get("p", 0))
             qty = float(data.get("q", 0))
             is_buyer_maker = data.get("m", False)
@@ -153,11 +164,12 @@ class BinanceWSListener:
         url = f"wss://fstream.binance.com/ws/{self._symbol.lower()}@aggTrade"
         self._trade_ws = websocket.WebSocketApp(
             url,
+            on_open=lambda ws: self._log and self._log("SYS", f"WS trade connected: {self._symbol}@aggTrade"),
             on_message=self._on_trade_msg,
             on_error=self._on_trade_error,
             on_close=self._on_trade_close,
         )
-        sys.stdout.write(f"WS trade: {self._symbol}@aggTrade\n")
+        self._log and self._log("SYS", f"WS trade starting: {self._symbol}@aggTrade")
         self._trade_ws.run_forever()
 
     # ==================== Helpers ====================
