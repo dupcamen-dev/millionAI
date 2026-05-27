@@ -262,16 +262,21 @@ static void rstpd_micro_reward_one(Neuron* n, float prev_pnl, float curr_pnl) {
 static void rstpd_commit_one(Neuron* n, float pnl_pct, int side) {
     float net = pnl_pct * (float)side - g_rstdp.fee_pct;
 
-    /* Sharpe-driven reward: how much better/worse than running average? */
+    /* Sharpe-driven reward: first 5 trades use simple reward, then normalized */
     g_rstdp.running_pnl_sum += net;
     g_rstdp.running_pnl_sq += net * net;
     g_rstdp.running_count++;
+    float reward;
+    if (g_rstdp.running_count < 5) {
+        reward = tanhf(g_rstdp.reward_k * net);  /* simple reward for early trades */
+    } else {
     float avg = g_rstdp.running_pnl_sum / (float)g_rstdp.running_count;
     float variance = (g_rstdp.running_pnl_sq / (float)g_rstdp.running_count) - avg * avg;
     float std = sqrtf(variance < 0.0f ? 0.0f : variance);
     float denominator = std < 0.01f ? 0.01f : std;
     float normalized = (net - avg) / denominator;
     float reward = tanhf(g_rstdp.reward_k * normalized);
+    }
 
     for (int i = 0; i < NUCLEUS_SIZE; i++) {
         n->velocity[i] = 0.9f * n->velocity[i] + g_rstdp.lr * n->eligibility[i] * reward;
@@ -329,7 +334,7 @@ EXPORT void snn_backtest(
     }
 
     for (int i = 0; i < TOTAL_N; i++) {
-        g_neurons[i].bias = 0.3f;
+        g_neurons[i].bias = (i < BUY_N) ? 0.3f : 0.0f;
         g_neurons[i].potential = 0.0f;
         g_neurons[i].threshold = 0.5f;
         g_neurons[i].refractory = 0.0f;
@@ -527,7 +532,7 @@ EXPORT void snn_init_live(const float* nucleus_data, float lr, float tau) {
     }
 
     for (int i = 0; i < TOTAL_N; i++) {
-        g_neurons[i].bias = 0.3f;
+        g_neurons[i].bias = (i < BUY_N) ? 0.3f : 0.0f;
         g_neurons[i].potential = 0.0f;
         g_neurons[i].threshold = 0.5f;
         g_neurons[i].refractory = 0.0f;

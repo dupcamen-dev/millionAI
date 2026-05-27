@@ -107,6 +107,8 @@ class BaseTrader:
 
     def init_random(self):
         self.neurons = [TradingNeuron() for _ in range(TOTAL_N)]
+        for i in range(BUY_N, TOTAL_N):
+            self.neurons[i].bias = 0.0  # SELL neurons: lower bias for BUY/SELL separation
 
     def load_config(self, path):
         with open(path) as f:
@@ -263,14 +265,17 @@ class BaseTrader:
         self._risk_scale = max(0.4, 1.0 / vol_mult)
         eff_th = self._base_threshold * vol_mult
 
-        # ── Margin filter ──
+# ── Margin filter (adaptive: looser during exploration) ──
+        margin_thresh = 0.03 if self.epsilon > 0.15 else 0.08
         margin = abs(buy_score - sell_score) / max(buy_score, sell_score, 0.01)
-        if margin < 0.15:
+        if margin < margin_thresh:
+            if max(buy_score, sell_score) >= eff_th and random.random() < self.epsilon:
+                return random.choice([1, -1])
             return 0
         if max(buy_score, sell_score) < eff_th:
             return 0
 
-# ── Final decision ──
+        # ── Final decision ──
         if buy_score > sell_score:
             return 1
         elif sell_score > buy_score:
@@ -296,14 +301,17 @@ class BaseTrader:
         # ── v1 Decision Pipeline ─────────────────────────────
         raw_action = self._compute_decision(buy_raw, sell_raw, th_val)
 
-        # ── Burst detector: entry needs 2+ consecutive, exit is instant ──
+        # ── Burst detector: entry needs 2+ consecutive, skip when epsilon high ──
         if self.pos == 0:
-            if raw_action == self._last_entry_signal and raw_action != 0:
-                self._entry_consecutive += 1
+            if self.epsilon >= 0.25:
+                action = raw_action  # single signal OK when model is exploring
             else:
-                self._entry_consecutive = 1 if raw_action != 0 else 0
-            self._last_entry_signal = raw_action
-            action = raw_action if self._entry_consecutive >= 2 else 0
+                if raw_action == self._last_entry_signal and raw_action != 0:
+                    self._entry_consecutive += 1
+                else:
+                    self._entry_consecutive = 1 if raw_action != 0 else 0
+                self._last_entry_signal = raw_action
+                action = raw_action if self._entry_consecutive >= 2 else 0
         else:
             action = raw_action  # no burst delay for exit signals
 
@@ -314,7 +322,7 @@ class BaseTrader:
         ts_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts)) if ts else time.strftime("%Y-%m-%d %H:%M")
 
         if self.pos == 0:
-            self.epsilon = max(0.02, self.epsilon * 0.995)
+            self.epsilon = max(0.08, self.epsilon * 0.998)
             if action != 0:
                 self._no_trade_streak = 0
                 self.pos = action
