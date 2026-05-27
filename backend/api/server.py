@@ -336,7 +336,7 @@ def trader_start(x_access_code: str = Header("")):
             trader.user_id = user_id
             trader._init_exchange()
 
-            listener = BinanceWSListener(trader.on_candle)
+            listener = BinanceWSListener(trader.on_candle, log_fn=trader._log)
             thread = threading.Thread(target=listener.connect, args=(trader.symbol, "5m"), daemon=True)
             thread.start()
 

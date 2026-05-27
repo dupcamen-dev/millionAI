@@ -233,6 +233,14 @@ class BaseTrader:
             self.equity_curve.append(self.equity)
 
         if self.candle_count % 100 == 0 or self.candle_count <= 3:
+            log_fn = getattr(self, '_log', None)
+            if log_fn:
+                extra = ""
+                if order_book is not None:
+                    extra = f" book_imb={spikes[8]:.2f}"
+                if trade_tape is not None:
+                    extra += f" cvd={spikes[11]:.2f}"
+                log_fn("SYS", f"Candle#{self.candle_count}: {self.symbol} ${c:.4f} action={action}{extra}")
             if use_c:
                 buy, sell, th = self._c_snn.forward(spikes)
                 self._log_state(ts_str, buy, sell, th, self.equity, self.epsilon)

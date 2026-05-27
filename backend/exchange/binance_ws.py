@@ -8,12 +8,13 @@ import websocket
 class BinanceWSListener:
     """Multi-stream WebSocket listener: kline (primary) + depth + trades (optional)."""
 
-    def __init__(self, on_candle, on_error=None, reconnect_delay=5):
+    def __init__(self, on_candle, on_error=None, reconnect_delay=5, log_fn=None):
         self.on_candle_cb = on_candle
         self.on_error_cb = on_error
         self.reconnect_delay = reconnect_delay
         self._last_close_time = 0
         self._lock = threading.Lock()
+        self._log = log_fn  # optional log callback
 
         # Accumulated trade tape stats for current 5-minute window
         self._trade_buy_vol = 0.0
@@ -72,11 +73,12 @@ class BinanceWSListener:
         url = f"wss://fstream.binance.com/ws/{self._symbol.lower()}@kline_{self._interval}"
         self._kline_ws = websocket.WebSocketApp(
             url,
+            on_open=lambda ws: self._log and self._log("SYS", f"WS kline connected: {self._symbol}@{self._interval}"),
             on_message=self._on_kline_msg,
             on_error=self._on_kline_error,
             on_close=self._on_kline_close,
         )
-        sys.stdout.write(f"WS kline: {self._symbol}@{self._interval}\n")
+        self._log and self._log("SYS", f"WS kline starting: {self._symbol}@{self._interval}")
         self._kline_ws.run_forever()
 
     # ==================== Depth stream (optional) ====================
