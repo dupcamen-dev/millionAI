@@ -405,6 +405,8 @@ class BaseTrader:
             close_reason = None
             if self.sl > 0 and curr_levered <= -self.sl:
                 close_reason = "SL"
+            elif self.tp > 0 and curr_levered >= self.tp:
+                close_reason = "TP"
             elif (self.pos == 1 and action == -1) or (self.pos == -1 and action == 1):
                 close_reason = "SIGNAL"
 
