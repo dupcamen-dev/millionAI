@@ -89,7 +89,7 @@ class BinanceWSListener:
             self._kline_ws.run_forever()
 
     def _run_kline(self):
-        url = f"wss://fstream.binance.com/ws/{self._symbol.lower()}@kline_{self._interval}"
+        url = f"wss://fstream.binance.com/market/ws/{self._symbol.lower()}@kline_{self._interval}"
         self._kline_ws = websocket.WebSocketApp(
             url,
             on_open=self._on_kline_open,
@@ -138,7 +138,7 @@ class BinanceWSListener:
             self._depth_ws.run_forever()
 
     def _run_depth(self):
-        url = f"wss://fstream.binance.com/ws/{self._symbol.lower()}@depth5@500ms"
+        url = f"wss://fstream.binance.com/public/ws/{self._symbol.lower()}@depth5@500ms"
         self._depth_ws = websocket.WebSocketApp(
             url,
             on_open=self._on_depth_open,
@@ -186,7 +186,7 @@ class BinanceWSListener:
             self._trade_ws.run_forever()
 
     def _run_trade(self):
-        url = f"wss://fstream.binance.com/ws/{self._symbol.lower()}@aggTrade"
+        url = f"wss://fstream.binance.com/public/ws/{self._symbol.lower()}@aggTrade"
         self._trade_ws = websocket.WebSocketApp(
             url,
             on_open=self._on_trade_open,
@@ -222,16 +222,6 @@ class BinanceWSListener:
         t_d.start()
         t_t = threading.Thread(target=self._run_trade, daemon=True)
         t_t.start()
-
-        # Monitor: log if no kline messages after 60s
-        def _kline_watchdog():
-            time.sleep(60)
-            if self._running and self._kline_msg_n == 0:
-                elapsed = time.time() - self._kline_start_ts
-                self._slog(f"Kline WARNING: 0 msgs in {elapsed:.0f}s, may need reconnect")
-                if self._kline_ws:
-                    self._kline_ws.close()
-        threading.Thread(target=_kline_watchdog, daemon=True).start()
 
         t_k.join()  # block until stopped
 
