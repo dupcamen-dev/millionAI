@@ -170,7 +170,7 @@ static void encode_features(float o, float h, float l, float c, float v,
 
 /* ==================== Neuron Forward ==================== */
 
-static int neuron_forward(Neuron* n, const float* input_vec, int input_size) {
+static int neuron_forward(Neuron* n, const float* input_vec, int input_size, int n_active) {
     if (n->refr_counter > 0) {
         n->refr_counter--;
         n->output = 0.0f;
@@ -195,7 +195,8 @@ static int neuron_forward(Neuron* n, const float* input_vec, int input_size) {
     for (int i = 0; i < limit; i++) {
         delta += input_vec[i] * state[i];
     }
-    delta = delta / (float)input_size + n->bias;
+    int divisor = (n_active > 0) ? n_active : input_size;
+    delta = delta / (float)divisor + n->bias;
     n->potential += delta;
 
     if (n->potential >= n->threshold) {
@@ -360,11 +361,11 @@ EXPORT void snn_backtest(
             for (int i = 0; i < SENSORY; i++) neg_spikes[i] = -spikes[i];
 
             for (int i = 0; i < BUY_N; i++) {
-                neuron_forward(&g_neurons[i], spikes, SENSORY);
+                neuron_forward(&g_neurons[i], spikes, SENSORY, 8);
                 buy_out[i] = g_neurons[i].output;
             }
             for (int i = 0; i < SELL_N; i++) {
-                neuron_forward(&g_neurons[BUY_N + i], neg_spikes, SENSORY);
+                neuron_forward(&g_neurons[BUY_N + i], neg_spikes, SENSORY, 8);
                 sell_out[i] = g_neurons[BUY_N + i].output;
             }
 
@@ -524,11 +525,11 @@ EXPORT void snn_forward_live(const float* spikes, float* buy_out, float* sell_ou
     for (int i = 0; i < SENSORY; i++) neg_spikes[i] = -spikes[i];
 
     for (int i = 0; i < BUY_N; i++) {
-        neuron_forward(&g_neurons[i], spikes, SENSORY);
+        neuron_forward(&g_neurons[i], spikes, SENSORY, SENSORY);
         buy_out[i] = g_neurons[i].output;
     }
     for (int i = 0; i < SELL_N; i++) {
-        neuron_forward(&g_neurons[BUY_N + i], neg_spikes, SENSORY);
+        neuron_forward(&g_neurons[BUY_N + i], neg_spikes, SENSORY, SENSORY);
         sell_out[i] = g_neurons[BUY_N + i].output;
     }
     *threshold = g_neurons[0].threshold;
