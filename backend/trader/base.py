@@ -44,7 +44,7 @@ class BaseTrader:
         self.equity_curve = []
         self.candle_count = 0
         self.entry_candle = 0
-        self.max_hold = 12
+        self.max_hold = 18
         self.epsilon = 0.15
         self.last_candle_time = time.time()
         self._c_snn = None  # NativeSNN instance (compiled C SNN)
@@ -166,7 +166,7 @@ class BaseTrader:
         window_pnl = self.total_pnl - self._last_evo_pnl
 
         if window_pnl < -0.05:
-            eff_tau = max(48, getattr(self, 'tau', 96) - 12)
+            eff_tau = max(72, getattr(self, 'tau', 96) - 12)
             self.tau = eff_tau
             if self._use_c_backend():
                 self._c_snn.set_learning_params(self.rstdp.lr * 1.1, eff_tau)
