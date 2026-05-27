@@ -13,6 +13,7 @@ class BinanceWSListener:
         self.on_error_cb = on_error
         self.reconnect_delay = reconnect_delay
         self._last_close_time = 0
+        self._last_open_log_ts = 0
         self._lock = threading.Lock()
         self._log = log_fn  # optional log callback
 
@@ -43,7 +44,13 @@ class BinanceWSListener:
             data = json.loads(msg)
             k = data.get("k", {})
             if not k.get("x", False):
-                return  # candle not closed
+                # Log every 5 min that kline data is flowing (first non-closed update)
+                import time as _time
+                now = _time.time()
+                if now - self._last_open_log_ts > 300:
+                    self._last_open_log_ts = now
+                    self._log and self._log("SYS", f"Kline alive: {self._symbol} ${k.get('c', '?')} (waiting for close)")
+                return
             ct = k["T"]
             with self._lock:
                 if ct <= self._last_close_time:

@@ -141,23 +141,21 @@ class BaseTrader:
 
         use_c = self._use_c_backend()
         if use_c:
-            buy, sell, th = self._c_snn.forward(spikes)
-            if buy > th and buy >= sell:
+            buy_val, sell_val, th_val = self._c_snn.forward(spikes)
+            if buy_val > th_val and buy_val >= sell_val:
                 action = 1
-            elif sell > th and sell > buy:
+            elif sell_val > th_val and sell_val > buy_val:
                 action = -1
             elif random.random() < self.epsilon:
                 action = random.choice([1, -1])
             else:
                 action = 0
-            # Update Python neuron outputs for logging
-            for i in range(BUY_N):
-                self.neurons[i].output = 0.0  # will be set on next access
-            for i in range(SELL_N):
-                self.neurons[BUY_N + i].output = 0.0
         else:
             self.forward_all(spikes)
             action = self.compute_action()
+            buy_val = max(n.output for n in self.neurons[:BUY_N]) if self.neurons else 0
+            sell_val = max(n.output for n in self.neurons[BUY_N:]) if len(self.neurons) > BUY_N else 0
+            th_val = self.neurons[0].threshold if self.neurons else 0.3
 
         ts_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts)) if ts else time.strftime("%Y-%m-%d %H:%M")
 
@@ -232,22 +230,17 @@ class BaseTrader:
 
             self.equity_curve.append(self.equity)
 
-        if self.candle_count % 100 == 0 or self.candle_count <= 3:
+        if self.candle_count % 100 == 0 or self.candle_count <= 10:
             log_fn = getattr(self, '_log', print)
             extra = ""
             if order_book is not None:
                 extra = f" book_imb={spikes[8]:.2f}"
             if trade_tape is not None:
                 extra += f" cvd={spikes[11]:.2f}"
-            log_fn("SYS", f"Candle#{self.candle_count}: {self.symbol} ${c:.4f} action={action}{extra}")
-            if use_c:
-                buy, sell, th = self._c_snn.forward(spikes)
-                self._log_state(ts_str, buy, sell, th, self.equity, self.epsilon)
-            else:
-                buy = max(n.output for n in self.neurons[:BUY_N]) if self.neurons else 0
-                sell = max(n.output for n in self.neurons[BUY_N:]) if len(self.neurons) > BUY_N else 0
-                th = self.neurons[0].threshold if self.neurons else 0.3
-                self._log_state(ts_str, buy, sell, th, self.equity, self.epsilon)
+            log_fn("SYS", f"Candle#{self.candle_count}: {self.symbol} ${c:.4f} buy={buy_val:.3f} sell={sell_val:.3f} th={th_val:.3f} pos={self.pos} action={action}{extra}")
+            if action != 0:
+                log_fn("SYS", f"!!! SIGNAL: {'BUY' if action==1 else 'SELL'} @ ${c:.4f} (buy={buy_val:.3f} sell={sell_val:.3f} th={th_val:.3f})")
+            self._log_state(ts_str, buy_val, sell_val, th_val, self.equity, self.epsilon)
 
         sys.stdout.flush()
         return action
