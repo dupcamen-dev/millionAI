@@ -207,7 +207,7 @@ static int neuron_forward(Neuron* n, const float* input_vec, int input_size, int
         n->output = n->potential;
         n->potential = 0.0f;
         n->refr_counter = (int)n->refractory;
-        n->threshold = 0.5f + (n->threshold - 0.5f) * 0.9f + 0.1f * fabsf(n->output);
+        n->threshold = 0.5f;
         return 1;
     } else {
         n->output = 0.0f;

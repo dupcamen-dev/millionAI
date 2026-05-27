@@ -51,7 +51,7 @@ class BaseTrader:
         self._last_entry_signal = 0
         self._entry_consecutive = 0
         self._activity_history = []
-        self._base_threshold = 0.5
+        self._base_threshold = 0.40
         self._risk_scale = 1.0
         self._firing_count = [0] * 36  # per-neuron firing count
         self._firing_window = 20       # sliding window size
@@ -149,7 +149,7 @@ class BaseTrader:
 
         # No-trade streak: gradually become more aggressive
         if self._no_trade_streak > 20 and self._no_trade_streak % 20 == 0:
-            self._base_threshold = max(0.3, self._base_threshold - 0.05)
+            self._base_threshold = max(0.25, self._base_threshold - 0.05)
             self.epsilon = min(0.3, self.epsilon + 0.05)
             log_fn("SYS", f"Evo: no-trade streak={self._no_trade_streak}, th→{self._base_threshold:.2f} eps→{self.epsilon:.2f}")
 
@@ -238,7 +238,7 @@ class BaseTrader:
             if avg > 0.50:
                 self._base_threshold = min(1.0, self._base_threshold + 0.005)
             elif avg < 0.10:
-                self._base_threshold = max(0.3, self._base_threshold - 0.005)
+                self._base_threshold = max(0.25, self._base_threshold - 0.005)
 
         # ── Score: top-3 weighted ──
         buy_sorted = sorted(buy_raw, reverse=True)
@@ -256,7 +256,7 @@ class BaseTrader:
         vol_pct = getattr(self, 'volatility_pct', 20.0)
         vol_mult = max(1.0, min(2.0, 1.0 + (vol_pct - 20.0) / 50.0))
         self._risk_scale = max(0.4, 1.0 / vol_mult)
-        eff_th = max(th_val, self._base_threshold) * vol_mult
+        eff_th = self._base_threshold * vol_mult
 
         # ── Margin filter ──
         margin = abs(buy_score - sell_score) / max(buy_score, sell_score, 0.01)
