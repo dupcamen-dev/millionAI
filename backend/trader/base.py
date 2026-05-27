@@ -284,7 +284,7 @@ class BaseTrader:
         eff_th = self._base_threshold * vol_mult
 
 # ── Margin filter (adaptive: looser during exploration) ──
-        margin_thresh = 0.03 if self.epsilon > 0.15 else 0.08
+        margin_thresh = 0.03 if self.epsilon > 0.15 else 0.10
         margin = abs(buy_score - sell_score) / max(buy_score, sell_score, 0.01)
         if margin < margin_thresh:
             if max(buy_score, sell_score) >= eff_th and random.random() < self.epsilon:
@@ -407,8 +407,6 @@ class BaseTrader:
                 close_reason = "SL"
             elif self.tp > 0 and curr_levered >= self.tp:
                 close_reason = "TP"
-            elif self.candle_count - self.entry_candle >= self.max_hold:
-                close_reason = "TIME"
             elif (self.pos == 1 and action == -1) or (self.pos == -1 and action == 1):
                 close_reason = "SIGNAL"
 
