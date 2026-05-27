@@ -65,6 +65,7 @@ class BaseTrader:
         self._bias_value = 0.3  # dynamic BUY/SELL bias
         self._recent_trades = []  # list of (side, pnl)
         self._last_evo_wins = 0
+        self._last_margin = 0.0
 
         if config_file and os.path.exists(config_file):
             self.load_config(config_file)
@@ -286,6 +287,7 @@ class BaseTrader:
 # ── Margin filter (adaptive: looser during exploration) ──
         margin_thresh = 0.03 if self.epsilon > 0.15 else 0.25
         margin = abs(buy_score - sell_score) / max(buy_score, sell_score, 0.01)
+        self._last_margin = margin  # store for burst detector
         if margin < margin_thresh:
             if max(buy_score, sell_score) >= eff_th and random.random() < self.epsilon:
                 return random.choice([1, -1])
@@ -321,8 +323,8 @@ class BaseTrader:
 
         # ── Burst detector: entry needs 2+ consecutive, skip when epsilon high ──
         if self.pos == 0:
-            if self.epsilon >= 0.25:
-                action = raw_action  # single signal OK when model is exploring
+            if self.epsilon >= 0.25 or self._last_margin > 0.4:
+                action = raw_action  # single signal OK when exploring or strong margin
             else:
                 if raw_action == self._last_entry_signal and raw_action != 0:
                     self._entry_consecutive += 1
