@@ -151,7 +151,7 @@ class BaseTrader:
         if self._no_trade_streak > 20 and self._no_trade_streak % 20 == 0:
             self._base_threshold = max(0.25, self._base_threshold - 0.05)
             self.epsilon = min(0.3, self.epsilon + 0.05)
-            log_fn("SYS", f"Evo: no-trade streak={self._no_trade_streak}, th→{self._base_threshold:.2f} eps→{self.epsilon:.2f}")
+            log_fn("SYS", f"Evo: no-trade streak={self._no_trade_streak}, th->{self._base_threshold:.2f} eps->{self.epsilon:.2f}")
 
         # Only continue if we have enough trades for window PnL checks
         if self.trades <= self._last_evo_trade:
@@ -165,7 +165,7 @@ class BaseTrader:
             if self._use_c_backend():
                 self._c_snn.set_learning_params(self.rstdp.lr * 1.1, eff_tau)
             self._risk_scale = max(0.4, self._risk_scale * 0.9)
-            log_fn("SYS", f"Evo: loss PnL={window_pnl*100:.1f}%, tau→{eff_tau} lr↑ risk↓")
+            log_fn("SYS", f"Evo: loss PnL={window_pnl*100:.1f}%, tau->{eff_tau} lr up risk down")
 
         if window_pnl > 0.10:
             eff_tau = min(192, getattr(self, 'tau', 96) + 12)
@@ -174,7 +174,7 @@ class BaseTrader:
                 self._c_snn.set_learning_params(self.rstdp.lr * 0.9, eff_tau)
             self.epsilon = max(0.05, self.epsilon * 0.8)
             self._base_threshold = min(1.0, self._base_threshold + 0.03)  # ← become less aggressive
-            log_fn("SYS", f"Evo: win PnL={window_pnl*100:.1f}%, tau→{eff_tau} lr↓ eps↓ th→{self._base_threshold:.2f}")
+            log_fn("SYS", f"Evo: win PnL={window_pnl*100:.1f}%, tau->{eff_tau} lr down eps down th->{self._base_threshold:.2f}")
 
         self._last_evo_pnl = self.total_pnl
 
@@ -220,6 +220,11 @@ class BaseTrader:
         self._last_evo_candle_count = self.candle_count
 
     def _compute_decision(self, buy_raw, sell_raw, th_val):
+        # ── Streak tracking + hyperparam ──
+        self._no_trade_streak += 1
+        if self.candle_count % 5 == 0:
+            self._hyperparam_cycle()
+
         # ── Track per-neuron firing ──
         for i, o in enumerate(buy_raw + sell_raw):
             if o > 0:
@@ -249,7 +254,7 @@ class BaseTrader:
         # ── Cross-inhibition ──
         if buy_score > sell_score:
             sell_score *= 0.5
-        else:
+        elif sell_score > buy_score:
             buy_score *= 0.5
 
         # ── Volatility threshold ──
@@ -265,19 +270,11 @@ class BaseTrader:
         if max(buy_score, sell_score) < eff_th:
             return 0
 
-        # ── Final decision ──
+# ── Final decision ──
         if buy_score > sell_score:
-            self._no_trade_streak = 0
             return 1
         elif sell_score > buy_score:
-            self._no_trade_streak = 0
             return -1
-        self._no_trade_streak += 1
-
-        # Hyperparam cycle every 5 candles
-        if self.candle_count % 5 == 0:
-            self._hyperparam_cycle()
-
         return 0
 
     def on_candle(self, o, h, l, c, v, ts=None, order_book=None, trade_tape=None):
@@ -319,6 +316,7 @@ class BaseTrader:
         if self.pos == 0:
             self.epsilon = max(0.02, self.epsilon * 0.995)
             if action != 0:
+                self._no_trade_streak = 0
                 self.pos = action
                 self.entry_price = c
                 self._has_prev_pnl = False
@@ -395,7 +393,7 @@ class BaseTrader:
                 extra = f" book_imb={spikes[8]:.2f}"
             if trade_tape is not None:
                 extra += f" cvd={spikes[11]:.2f}"
-            llog_fn("SYS", f"Candle#{self.candle_count}: {self.symbol} ${c:.4f} buy={buy_val:.3f} sell={sell_val:.3f} th={th_val:.3f} base_th={self._base_threshold:.2f} pos={self.pos} action={action}{extra}")
+            log_fn("SYS", f"Candle#{self.candle_count}: {self.symbol} ${c:.4f} buy={buy_val:.3f} sell={sell_val:.3f} th={th_val:.3f} base_th={self._base_threshold:.2f} pos={self.pos} action={action}{extra}")
             if action != 0:
                 log_fn("SYS", f"!!! SIGNAL: {'BUY' if action==1 else 'SELL'} @ ${c:.4f} (buy={buy_val:.3f} sell={sell_val:.3f} th={th_val:.3f} base_th={self._base_threshold:.2f})")
             self._log_state(ts_str, buy_val, sell_val, th_val, self.equity, self.epsilon)
