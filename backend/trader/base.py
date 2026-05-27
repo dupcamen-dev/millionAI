@@ -143,51 +143,58 @@ class BaseTrader:
             return random.choice([1, -1])
         return 0
 
-    def _evo_cycle(self):
-        """EvoBrain: neurogenesis + hyperparameter evolution every 10 closed trades."""
+    def _hyperparam_cycle(self):
+        """Run every 5 candles — adjusts params based on trading patterns."""
+        log_fn = getattr(self, '_log', print)
+
+        # No-trade streak: gradually become more aggressive
+        if self._no_trade_streak > 20 and self._no_trade_streak % 20 == 0:
+            self._base_threshold = max(0.3, self._base_threshold - 0.05)
+            self.epsilon = min(0.3, self.epsilon + 0.05)
+            log_fn("SYS", f"Evo: no-trade streak={self._no_trade_streak}, th→{self._base_threshold:.2f} eps→{self.epsilon:.2f}")
+
+        # Only continue if we have enough trades for window PnL checks
+        if self.trades <= self._last_evo_trade:
+            return
+
+        window_pnl = self.total_pnl - self._last_evo_pnl
+
+        if window_pnl < -0.05:
+            eff_tau = max(24, getattr(self, 'tau', 96) - 12)
+            self.tau = eff_tau
+            if self._use_c_backend():
+                self._c_snn.set_learning_params(self.rstdp.lr * 1.1, eff_tau)
+            self._risk_scale = max(0.4, self._risk_scale * 0.9)
+            log_fn("SYS", f"Evo: loss PnL={window_pnl*100:.1f}%, tau→{eff_tau} lr↑ risk↓")
+
+        if window_pnl > 0.10:
+            eff_tau = min(192, getattr(self, 'tau', 96) + 12)
+            self.tau = eff_tau
+            if self._use_c_backend():
+                self._c_snn.set_learning_params(self.rstdp.lr * 0.9, eff_tau)
+            self.epsilon = max(0.05, self.epsilon * 0.8)
+            self._base_threshold = min(1.0, self._base_threshold + 0.03)  # ← become less aggressive
+            log_fn("SYS", f"Evo: win PnL={window_pnl*100:.1f}%, tau→{eff_tau} lr↓ eps↓ th→{self._base_threshold:.2f}")
+
+        self._last_evo_pnl = self.total_pnl
+
+    def _neurogenesis_cycle(self):
+        """Run every 10 closed trades — replace weak neurons with mutated elite copies."""
         if self.trades - self._last_evo_trade < 10:
             return
         if not self._use_c_backend():
             return
 
-        window_pnl = self.total_pnl - self._last_evo_pnl
-        window_candles = self.candle_count - self._last_evo_candle_count
-        self._no_trade_streak = window_candles - (self.trades - self._last_evo_trade) * 2
-
         log_fn = getattr(self, '_log', print)
-
-        # ── Hyperparam evolution ──
-        if self._no_trade_streak > 20:
-            self._base_threshold = max(0.3, self._base_threshold - 0.05)
-            self.epsilon = min(0.3, self.epsilon + 0.05)
-            log_fn("SYS", f"Evo: no-trade streak={self._no_trade_streak}, th→{self._base_threshold:.2f} eps→{self.epsilon:.2f}")
-
-        if window_pnl < -0.05:
-            eff_tau = max(24, getattr(self, 'tau', 96) - 12)
-            self.tau = eff_tau
-            self._c_snn.set_learning_params(self.rstdp.lr * 1.1, eff_tau)
-            self._risk_scale = max(0.4, self._risk_scale * 0.9)
-            log_fn("SYS", f"Evo: loss window PnL={window_pnl*100:.1f}%, tau→{eff_tau} lr↑ risk↓")
-
-        if window_pnl > 0.10:
-            eff_tau = min(192, getattr(self, 'tau', 96) + 12)
-            self.tau = eff_tau
-            self._c_snn.set_learning_params(self.rstdp.lr * 0.9, eff_tau)
-            self.epsilon = max(0.05, self.epsilon * 0.8)
-            log_fn("SYS", f"Evo: win window PnL={window_pnl*100:.1f}%, tau→{eff_tau} lr↓ eps↓")
-
-        # ── Neurogenesis (demote weak + promote reserve) ──
         mask = self._c_snn.get_active_mask()
         state = self._c_snn.save_state()
-        weights = np.array(state['weights'])  # (36, 64)
+        weights = np.array(state['weights'])
 
-        # Utility: 0.8 * firing_rate + 0.2 * normalized_weight_variance
         firing_rates = [self._firing_count[i] / max(self._firing_window, 1) for i in range(TOTAL_N)]
         weight_var = weights.var(axis=1)
         var_max = max(weight_var.max(), 0.01)
         utility = [0.8 * fr + 0.2 * (weight_var[i] / var_max) for i, fr in enumerate(firing_rates)]
 
-        # Demote 2 weakest BUY (indices 0..17 where active) + 2 weakest SELL (18..35 where active)
         for side, start in [("BUY", 0), ("SELL", 18)]:
             active = [(i, utility[i]) for i in range(start, start + 18) if mask[i]]
             active.sort(key=lambda x: x[1])
@@ -196,13 +203,12 @@ class BaseTrader:
                 self._c_snn.deactivate_neuron(idx)
                 log_fn("SYS", f"Evo: demote {side} N{idx} (utility={u:.3f})")
 
-        # Promote 2 reserve BUY (16,17) + 2 reserve SELL (34,35)
         for side, start, el_start in [("BUY", 16, 0), ("SELL", 34, 18)]:
             active_in_side = [i for i in range(el_start, el_start + 18) if mask[i]]
             elite = active_in_side[:3] if len(active_in_side) >= 3 else active_in_side
             for ri in range(start, start + 2):
                 if mask[ri]:
-                    continue  # already active
+                    continue
                 ei = elite[ri % len(elite)]
                 self._c_snn.mutate_neuron(ri, ei, 0.1)
                 self._c_snn.activate_neuron(ri)
@@ -261,9 +267,17 @@ class BaseTrader:
 
         # ── Final decision ──
         if buy_score > sell_score:
+            self._no_trade_streak = 0
             return 1
         elif sell_score > buy_score:
+            self._no_trade_streak = 0
             return -1
+        self._no_trade_streak += 1
+
+        # Hyperparam cycle every 5 candles
+        if self.candle_count % 5 == 0:
+            self._hyperparam_cycle()
+
         return 0
 
     def on_candle(self, o, h, l, c, v, ts=None, order_book=None, trade_tape=None):
@@ -366,7 +380,7 @@ class BaseTrader:
                 if use_c:
                     self._sync_weights_from_c()
                     self._save_full_state_to_db()
-                    self._evo_cycle()
+                    self._neurogenesis_cycle()
                 side = "BUY" if self.pos == 1 else "SELL"
                 self.on_exit(side, c, levered_pnl, close_reason, ts_str)
                 self.pos = 0
