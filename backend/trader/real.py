@@ -181,8 +181,8 @@ class RealTrader(BaseTrader):
 
             # Adaptive SL/TP from screener volatility
             vol = best_asset["volatility"] / 100.0
-            self.sl = min(0.10, max(0.04, vol * 0.5))
-            self.tp = max(0.12, vol * 1.0)
+            self.sl = min(0.02, max(0.01, vol * 0.2))
+            self.tp = 0.06
             self.tp = max(0.12, vol * 0.8)
             self.volatility_pct = best_asset["volatility"]
             self._log("SYS", f"Adaptive SL/TP: {self.sl*100:.1f}% / {self.tp*100:.1f}% (vol={best_asset['volatility']:.1f}%)")
