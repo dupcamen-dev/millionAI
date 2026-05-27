@@ -62,12 +62,12 @@ class SupabaseDB:
         """Save full model state: weights + membrane + eligibility + RSTDP."""
         data = {
             "user_id": user_id, "symbol": symbol.upper(),
-            "weights": json.dumps(state.get("weights", [])),
+            "weights": state.get("weights", []),
             "leverage": state.get("leverage", 1),
             "risk_score": state.get("risk_score", 0.0),
-            "membrane": json.dumps(state.get("membrane", [])),
-            "eligibility": json.dumps(state.get("eligibility", [])),
-            "rstpd": json.dumps(state.get("rstpd", {})),
+            "membrane": state.get("membrane", []),
+            "eligibility": state.get("eligibility", []),
+            "rstpd": state.get("rstpd", {}),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         # arch_version column may not exist yet — add gracefully
@@ -99,7 +99,7 @@ class SupabaseDB:
                     val = row.get(field)
                     if isinstance(val, str):
                         return json.loads(val)
-                    return val or {}
+                    return val if val is not None else [] if field != "rstpd" else {}
                 return {
                     "weights": _parse("weights"),
                     "leverage": row.get("leverage", 1),
@@ -114,5 +114,18 @@ class SupabaseDB:
         path = os.path.join(fallback_dir, f"{user_id}_{symbol.upper()}.json")
         if os.path.exists(path):
             with open(path) as f:
-                return json.load(f)
+                data = json.load(f)
+            # Handle both old (string-encoded) and new (native) format
+            def _to_list(val):
+                if isinstance(val, str):
+                    return json.loads(val)
+                return val if val else []
+            return {
+                "weights": _to_list(data.get("weights", [])),
+                "leverage": data.get("leverage", 1),
+                "risk_score": data.get("risk_score", 0.0),
+                "membrane": _to_list(data.get("membrane", [])),
+                "eligibility": _to_list(data.get("eligibility", [])),
+                "rstpd": data.get("rstpd", {}),
+            }
         return None
