@@ -395,9 +395,9 @@ class BaseTrader:
                 extra = f" book_imb={spikes[8]:.2f}"
             if trade_tape is not None:
                 extra += f" cvd={spikes[11]:.2f}"
-            log_fn("SYS", f"Candle#{self.candle_count}: {self.symbol} ${c:.4f} buy={buy_val:.3f} sell={sell_val:.3f} th={th_val:.3f} pos={self.pos} action={action}{extra}")
+            llog_fn("SYS", f"Candle#{self.candle_count}: {self.symbol} ${c:.4f} buy={buy_val:.3f} sell={sell_val:.3f} th={th_val:.3f} base_th={self._base_threshold:.2f} pos={self.pos} action={action}{extra}")
             if action != 0:
-                log_fn("SYS", f"!!! SIGNAL: {'BUY' if action==1 else 'SELL'} @ ${c:.4f} (buy={buy_val:.3f} sell={sell_val:.3f} th={th_val:.3f})")
+                log_fn("SYS", f"!!! SIGNAL: {'BUY' if action==1 else 'SELL'} @ ${c:.4f} (buy={buy_val:.3f} sell={sell_val:.3f} th={th_val:.3f} base_th={self._base_threshold:.2f})")
             self._log_state(ts_str, buy_val, sell_val, th_val, self.equity, self.epsilon)
 
         sys.stdout.flush()
