@@ -154,6 +154,9 @@ class NativeSNN:
             "trades": int(arr[pos + 2]),
             "wins": int(arr[pos + 3]),
             "trades_total": int(arr[pos + 4]),
+            "running_pnl_sum": float(arr[pos + 5]),
+            "running_pnl_sq": float(arr[pos + 6]),
+            "running_count": int(arr[pos + 7]),
         }
         return {"weights": weights_2d, "membrane": membrane,
                 "eligibility": eligibility_2d, "velocity": velocity_2d, "rstpd": rstpd}
@@ -189,6 +192,9 @@ class NativeSNN:
         buf[pos] = rstpd.get("trades", 0); pos += 1
         buf[pos] = rstpd.get("wins", 0); pos += 1
         buf[pos] = rstpd.get("trades_total", 0); pos += 1
+        buf[pos] = rstpd.get("running_pnl_sum", 0.0); pos += 1
+        buf[pos] = rstpd.get("running_pnl_sq", 0.0); pos += 1
+        buf[pos] = rstpd.get("running_count", 0); pos += 1
         self.lib.snn_load_state(buf, ctypes.c_int(1 if load_eligibility else 0),
                                 ctypes.c_int(1 if load_membrane else 0))
 

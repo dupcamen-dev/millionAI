@@ -59,6 +59,9 @@ typedef struct {
     int   trades;
     int   wins;
     int   trades_total;
+    float running_pnl_sum;
+    float running_pnl_sq;
+    int   running_count;
 } RSTDPState;
 
 /* ==================== Global State ==================== */
@@ -225,6 +228,9 @@ static void rstpd_init(RSTDPState* s, float lr, float tau) {
     s->trades = 0;
     s->wins = 0;
     s->trades_total = 0;
+    s->running_pnl_sum = 0.0f;
+    s->running_pnl_sq = 0.0f;
+    s->running_count = 0;
 }
 
 static void rstpd_accumulate_one(Neuron* n, const float* input_vec, int input_size) {
@@ -254,7 +260,18 @@ static void rstpd_micro_reward_one(Neuron* n, float prev_pnl, float curr_pnl) {
 
 static void rstpd_commit_one(Neuron* n, float pnl_pct, int side) {
     float net = pnl_pct * (float)side - g_rstdp.fee_pct;
-    float reward = tanhf(g_rstdp.reward_k * net);
+
+    /* Sharpe-driven reward: how much better/worse than running average? */
+    g_rstdp.running_pnl_sum += net;
+    g_rstdp.running_pnl_sq += net * net;
+    g_rstdp.running_count++;
+    float avg = g_rstdp.running_pnl_sum / (float)g_rstdp.running_count;
+    float variance = (g_rstdp.running_pnl_sq / (float)g_rstdp.running_count) - avg * avg;
+    float std = sqrtf(variance < 0.0f ? 0.0f : variance);
+    float denominator = std < 0.01f ? 0.01f : std;
+    float normalized = (net - avg) / denominator;
+    float reward = tanhf(g_rstdp.reward_k * normalized);
+
     for (int i = 0; i < NUCLEUS_SIZE; i++) {
         n->velocity[i] = 0.9f * n->velocity[i] + g_rstdp.lr * n->eligibility[i] * reward;
         n->nucleus[i] += n->velocity[i];
@@ -609,13 +626,14 @@ EXPORT void snn_get_rstdp_state_live(float* lr, float* total_pnl, int* trades, i
  *   nucleus[NUCLEUS_SIZE], bias(1), potential(1), threshold(1), refractory(1),
  *   refr_counter(1), output(1), eligibility[NUCLEUS_SIZE], velocity[NUCLEUS_SIZE]
  * Then RSTDP state:
- *   lr(1), total_pnl(1), trades(1), wins(1), trades_total(1)
- * Total floats = TOTAL_N * (NUCLEUS_SIZE + 6 + NUCLEUS_SIZE + NUCLEUS_SIZE) + 5
- *              = 32 * (64 + 6 + 64 + 64) + 5 = 32 * 198 + 5 = 6341
+ *   lr(1), total_pnl(1), trades(1), wins(1), trades_total(1),
+ *   running_pnl_sum(1), running_pnl_sq(1), running_count(1)  [Sharpe stats]
+ * Total floats = TOTAL_N * (NUCLEUS_SIZE + 6 + NUCLEUS_SIZE + NUCLEUS_SIZE) + 8
+ *              = 32 * (64 + 6 + 64 + 64) + 8 = 32 * 198 + 8 = 6344
  */
 
 #define STATE_PER_NEURON (NUCLEUS_SIZE + 6 + NUCLEUS_SIZE + NUCLEUS_SIZE)  /* 198 */
-#define STATE_TOTAL (TOTAL_N * STATE_PER_NEURON + 5)                        /* 6341 */
+#define STATE_TOTAL (TOTAL_N * STATE_PER_NEURON + 8)                        /* 6344 */
 
 EXPORT int snn_save_state(float* buf) {
     int pos = 0;
@@ -643,6 +661,9 @@ EXPORT int snn_save_state(float* buf) {
     buf[pos++] = (float)g_rstdp.trades;
     buf[pos++] = (float)g_rstdp.wins;
     buf[pos++] = (float)g_rstdp.trades_total;
+    buf[pos++] = g_rstdp.running_pnl_sum;
+    buf[pos++] = g_rstdp.running_pnl_sq;
+    buf[pos++] = (float)g_rstdp.running_count;
     return pos;
 }
 
@@ -680,5 +701,8 @@ EXPORT void snn_load_state(const float* buf, int load_eligibility, int load_memb
         g_rstdp.trades = (int)buf[pos++];
         g_rstdp.wins = (int)buf[pos++];
         g_rstdp.trades_total = (int)buf[pos++];
+        g_rstdp.running_pnl_sum = buf[pos++];
+        g_rstdp.running_pnl_sq = buf[pos++];
+        g_rstdp.running_count = (int)buf[pos++];
     }
 }

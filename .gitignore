@@ -44,3 +44,5 @@ backend/__pycache__/
 # Compiled binaries
 *.dll
 *.so
+
+*.rar
