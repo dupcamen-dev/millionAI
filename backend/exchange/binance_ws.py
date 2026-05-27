@@ -1,103 +1,164 @@
 import json
 import sys
 import time
+import threading
 import websocket
 
 
 class BinanceWSListener:
+    """Multi-stream WebSocket listener: kline (primary) + depth + trades (optional)."""
+
     def __init__(self, on_candle, on_error=None, reconnect_delay=5):
         self.on_candle_cb = on_candle
         self.on_error_cb = on_error
         self.reconnect_delay = reconnect_delay
-        self.ws = None
         self._last_close_time = 0
+        self._lock = threading.Lock()
 
         # Accumulated trade tape stats for current 5-minute window
         self._trade_buy_vol = 0.0
         self._trade_sell_vol = 0.0
         self._trade_count = 0
-        self._trades = []  # last 50 trade sizes for large trade detection
+        self._trades_sizes = []  # last N trade sizes for large trade detection
 
         # Latest order book snapshot
         self._order_book = None
 
-    def _on_message(self, ws, msg):
+        # Threads
+        self._kline_ws = None
+        self._depth_ws = None
+        self._trade_ws = None
+        self._threads = []
+        self._running = True
+
+    # ==================== Kline stream (PRIMARY) ====================
+
+    def _on_kline_msg(self, ws, msg):
         try:
-            parsed = json.loads(msg)
+            data = json.loads(msg)
+            k = data.get("k", {})
+            if not k.get("x", False):
+                return  # candle not closed
+            ct = k["T"]
+            with self._lock:
+                if ct <= self._last_close_time:
+                    return
+                self._last_close_time = ct
+                o = float(k["o"]); h = float(k["h"]); l = float(k["l"])
+                c = float(k["c"]); v = float(k["v"])
+                order_book = self._build_order_book()
+                trade_tape = self._build_trade_tape()
+                # Reset accumulators
+                self._trade_buy_vol = 0.0
+                self._trade_sell_vol = 0.0
+                self._trade_count = 0
+                self._trades_sizes = []
 
-            # Handle combined stream format: {"stream": "...", "data": {...}}
-            if "stream" in parsed:
-                stream = parsed["stream"]
-                data = parsed.get("data", parsed)
-            else:
-                data = parsed
-                stream = "kline"  # fallback
-
-            if "depth" in stream:
-                self._handle_depth(data)
-            elif "aggTrade" in stream:
-                self._handle_trade(data)
-            else:
-                self._handle_kline(data)
-
+            self.on_candle_cb(o, h, l, c, v, k["t"] / 1000,
+                              order_book=order_book, trade_tape=trade_tape)
         except Exception as e:
-            sys.stderr.write(f"WS on_message: {e}\n")
+            sys.stderr.write(f"[kline] parse error: {e}\n")
 
-    def _handle_kline(self, data):
-        k = data.get("k", data)
-        if not k.get("x", False):
-            return  # candle not closed yet
-        ct = k["T"]
-        if ct <= self._last_close_time:
-            return
-        self._last_close_time = ct
-        o = float(k["o"]); h = float(k["h"]); l = float(k["l"])
-        c = float(k["c"]); v = float(k["v"])
+    def _on_kline_error(self, ws, error):
+        sys.stderr.write(f"[kline] WS error: {error}\n")
 
-        # Build order book snapshot
-        order_book = self._build_order_book()
+    def _on_kline_close(self, ws, *args):
+        sys.stdout.write(f"[kline] closed, reconnecting in {self.reconnect_delay}s...\n")
+        time.sleep(self.reconnect_delay)
+        if self._running:
+            self._kline_ws.run_forever()
 
-        # Build trade tape summary for this window
-        trade_tape = self._build_trade_tape()
+    def _run_kline(self):
+        url = f"wss://fstream.binance.com/ws/{self._symbol.lower()}@kline_{self._interval}"
+        self._kline_ws = websocket.WebSocketApp(
+            url,
+            on_message=self._on_kline_msg,
+            on_error=self._on_kline_error,
+            on_close=self._on_kline_close,
+        )
+        sys.stdout.write(f"WS kline: {self._symbol}@{self._interval}\n")
+        self._kline_ws.run_forever()
 
-        # Reset accumulators for next window
-        self._trade_buy_vol = 0.0
-        self._trade_sell_vol = 0.0
-        self._trade_count = 0
-        self._trades = []
+    # ==================== Depth stream (optional) ====================
 
-        self.on_candle_cb(o, h, l, c, v, k["t"] / 1000,
-                          order_book=order_book, trade_tape=trade_tape)
+    def _on_depth_msg(self, ws, msg):
+        try:
+            data = json.loads(msg)
+            bids = data.get("bids", [])
+            asks = data.get("asks", [])
+            if not bids or not asks:
+                return
+            bid_qty = sum(float(b[1]) for b in bids[:5])
+            ask_qty = sum(float(a[1]) for a in asks[:5])
+            best_bid = float(bids[0][0]) if bids else 0
+            best_ask = float(asks[0][0]) if asks else 0
+            max_bid_qty = max((float(b[1]) for b in bids[:5]), default=0)
+            max_ask_qty = max((float(a[1]) for a in asks[:5]), default=0)
+            with self._lock:
+                self._order_book = [bid_qty, ask_qty, best_bid, best_ask, max_bid_qty, max_ask_qty]
+        except Exception as e:
+            pass  # depth updates are frequent, ignore parse errors
 
-    def _handle_depth(self, data):
-        """Store latest order book depth 5 snapshot."""
-        bids = data.get("bids", [])
-        asks = data.get("asks", [])
-        if not bids or not asks:
-            return
-        bid_qty = sum(float(b[1]) for b in bids[:5])
-        ask_qty = sum(float(a[1]) for a in asks[:5])
-        best_bid = float(bids[0][0]) if bids else 0
-        best_ask = float(asks[0][0]) if asks else 0
-        max_bid_qty = max((float(b[1]) for b in bids[:5])) if bids else 0
-        max_ask_qty = max((float(a[1]) for a in asks[:5])) if asks else 0
-        self._order_book = [bid_qty, ask_qty, best_bid, best_ask, max_bid_qty, max_ask_qty]
+    def _on_depth_error(self, ws, error):
+        sys.stderr.write(f"[depth] WS error: {error}\n")
 
-    def _handle_trade(self, data):
-        """Accumulate trade stats for current 5-minute window."""
-        price = float(data.get("p", 0))
-        qty = float(data.get("q", 0))
-        is_buyer_maker = data.get("m", False)
-        vol = price * qty
+    def _on_depth_close(self, ws, *args):
+        sys.stdout.write(f"[depth] closed, reconnecting in {self.reconnect_delay}s...\n")
+        time.sleep(self.reconnect_delay)
+        if self._running:
+            self._depth_ws.run_forever()
 
-        # m=True: buyer was maker (limit), so taker was seller = aggressive SELL
-        if is_buyer_maker:
-            self._trade_sell_vol += vol
-        else:
-            self._trade_buy_vol += vol
+    def _run_depth(self):
+        url = f"wss://fstream.binance.com/ws/{self._symbol.lower()}@depth5@500ms"
+        self._depth_ws = websocket.WebSocketApp(
+            url,
+            on_message=self._on_depth_msg,
+            on_error=self._on_depth_error,
+            on_close=self._on_depth_close,
+        )
+        sys.stdout.write(f"WS depth: {self._symbol}@depth5\n")
+        self._depth_ws.run_forever()
 
-        self._trade_count += 1
-        self._trades.append(qty)
+    # ==================== Trade stream (optional) ====================
+
+    def _on_trade_msg(self, ws, msg):
+        try:
+            data = json.loads(msg)
+            price = float(data.get("p", 0))
+            qty = float(data.get("q", 0))
+            is_buyer_maker = data.get("m", False)
+            vol = price * qty
+            with self._lock:
+                if is_buyer_maker:
+                    self._trade_sell_vol += vol  # taker was seller
+                else:
+                    self._trade_buy_vol += vol   # taker was buyer
+                self._trade_count += 1
+                self._trades_sizes.append(qty)
+        except Exception as e:
+            pass  # trades are frequent, ignore parse errors
+
+    def _on_trade_error(self, ws, error):
+        sys.stderr.write(f"[trade] WS error: {error}\n")
+
+    def _on_trade_close(self, ws, *args):
+        sys.stdout.write(f"[trade] closed, reconnecting in {self.reconnect_delay}s...\n")
+        time.sleep(self.reconnect_delay)
+        if self._running:
+            self._trade_ws.run_forever()
+
+    def _run_trade(self):
+        url = f"wss://fstream.binance.com/ws/{self._symbol.lower()}@aggTrade"
+        self._trade_ws = websocket.WebSocketApp(
+            url,
+            on_message=self._on_trade_msg,
+            on_error=self._on_trade_error,
+            on_close=self._on_trade_close,
+        )
+        sys.stdout.write(f"WS trade: {self._symbol}@aggTrade\n")
+        self._trade_ws.run_forever()
+
+    # ==================== Helpers ====================
 
     def _build_order_book(self):
         if self._order_book:
@@ -105,54 +166,47 @@ class BinanceWSListener:
         return None
 
     def _build_trade_tape(self):
-        """Build trade tape summary for the 5-minute window."""
         if self._trade_count == 0:
             return None
-        total_vol = self._trade_buy_vol + self._trade_sell_vol
-        if total_vol == 0:
-            return None
-        # Large trade ratio: fraction of trades > 2x median size
-        if len(self._trades) > 1:
-            self._trades.sort()
-            median = self._trades[len(self._trades) // 2]
-            large_count = sum(1 for q in self._trades if q > 2 * median)
-            large_ratio = large_count / len(self._trades)
+        if len(self._trades_sizes) > 1:
+            sorted_trades = sorted(self._trades_sizes)
+            median = sorted_trades[len(sorted_trades) // 2]
+            large_count = sum(1 for q in self._trades_sizes if q > 2 * median)
+            large_ratio = large_count / len(self._trades_sizes)
         else:
             large_ratio = 0.0
         return [self._trade_buy_vol, self._trade_sell_vol,
                 float(self._trade_count), large_ratio]
 
-    def _on_error(self, ws, error):
-        sys.stderr.write(f"WS error: {error}\n")
-        if self.on_error_cb:
-            self.on_error_cb(error)
-
-    def _on_close(self, ws, close_status, close_msg):
-        sys.stdout.write(f"WS closed, reconnecting in {self.reconnect_delay}s...\n")
-        time.sleep(self.reconnect_delay)
-        self.ws.run_forever()
-
-    def _on_open(self, ws):
-        sys.stdout.write(f"WS connected: {self.symbol} (kline+depth+trade)\n")
+    # ==================== Public API ====================
 
     def connect(self, symbol: str, interval: str = "5m"):
-        self.symbol = symbol.upper()
-        self.interval = interval
-        sym = self.symbol.lower()
-        # Combined stream: kline + order book + trades
-        self.url = (
-            f"wss://fstream.binance.com/stream?streams="
-            f"{sym}@kline_{interval}/{sym}@depth5@500ms/{sym}@aggTrade"
-        )
-        self.ws = websocket.WebSocketApp(
-            self.url,
-            on_open=self._on_open,
-            on_message=self._on_message,
-            on_error=self._on_error,
-            on_close=self._on_close,
-        )
-        self.ws.run_forever()
+        self._symbol = symbol.upper()
+        self._interval = interval
+
+        # Start kline (required)
+        t_k = threading.Thread(target=self._run_kline, daemon=True)
+        t_k.start()
+        self._threads.append(t_k)
+
+        # Start depth (optional, best-effort)
+        t_d = threading.Thread(target=self._run_depth, daemon=True)
+        t_d.start()
+        self._threads.append(t_d)
+
+        # Start trades (optional, best-effort)
+        t_t = threading.Thread(target=self._run_trade, daemon=True)
+        t_t.start()
+        self._threads.append(t_t)
+
+        # Wait forever on kline thread (primary)
+        t_k.join()
 
     def stop(self):
-        if self.ws:
-            self.ws.close()
+        self._running = False
+        for ws in [self._kline_ws, self._depth_ws, self._trade_ws]:
+            if ws:
+                try:
+                    ws.close()
+                except Exception:
+                    pass
