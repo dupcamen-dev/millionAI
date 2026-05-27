@@ -186,11 +186,10 @@ static int neuron_forward(Neuron* n, const float* input_vec, int input_size, int
     float unfolded2[UNFOLD_SIZE];
     float state[NUCLEUS_SIZE];
 
-    /* Level 1: nucleus[64] -> unfolded[256] -> compress -> features[64] */
-    archive_unfold(n->nucleus, NUCLEUS_SIZE, unfolded1, UNFOLD_SIZE, 1);
+    /* Level 1 (or 3): nucleus[64] -> unfolded[256] -> compress -> features[64] */
+archive_unfold(n->nucleus, NUCLEUS_SIZE, unfolded1, UNFOLD_SIZE, 1);
     archive_compress(unfolded1, UNFOLD_SIZE, compressed1, NUCLEUS_SIZE);
 
-    /* Level 2: features[64] -> unfolded[256] -> compress -> state[64] */
     archive_unfold(compressed1, NUCLEUS_SIZE, unfolded2, UNFOLD_SIZE, 2);
     archive_compress(unfolded2, UNFOLD_SIZE, state, NUCLEUS_SIZE);
 
@@ -340,7 +339,7 @@ EXPORT void snn_backtest(
     }
 
     for (int i = 0; i < TOTAL_N; i++) {
-        g_neurons[i].bias = 0.3f;  /* equal BUY/SELL, R-STDP differentiates */
+        g_neurons[i].bias = (i < BUY_N) ? 0.3f : 0.0f;  /* BUY=0.3, SELL=0.0 */
         g_neurons[i].potential = 0.0f;
         g_neurons[i].threshold = 0.5f;
         g_neurons[i].refractory = 0.0f;
@@ -538,7 +537,7 @@ EXPORT void snn_init_live(const float* nucleus_data, float lr, float tau) {
     }
 
     for (int i = 0; i < TOTAL_N; i++) {
-        g_neurons[i].bias = 0.3f;  /* equal BUY/SELL, R-STDP differentiates */
+        g_neurons[i].bias = (i < BUY_N) ? 0.3f : 0.0f;  /* BUY=0.3, SELL=0.0 */
         g_neurons[i].potential = 0.0f;
         g_neurons[i].threshold = 0.5f;
         g_neurons[i].refractory = 0.0f;
