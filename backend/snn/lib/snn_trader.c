@@ -293,6 +293,7 @@ static void rstpd_commit_one(Neuron* n, float pnl_pct, int side) {
     g_rstdp.trades_total++;
     if (net > 0) g_rstdp.wins++;
     g_rstdp.lr = g_rstdp.lr_0 / (1.0f + 0.005f * (float)g_rstdp.trades_total);
+    if (g_rstdp.lr < 0.002f) g_rstdp.lr = 0.002f;  /* minimum lr */
 }
 
 /* ==================== Full Backtest in C ==================== */

@@ -62,6 +62,9 @@ class BaseTrader:
         self._last_firing_action = 0
         self._last_firing_price = 0.0
         self._last_firing_candle = -10
+        self._bias_value = 0.3  # dynamic BUY/SELL bias
+        self._recent_trades = []  # list of (side, pnl)
+        self._last_evo_wins = 0
 
         if config_file and os.path.exists(config_file):
             self.load_config(config_file)
@@ -163,7 +166,7 @@ class BaseTrader:
         window_pnl = self.total_pnl - self._last_evo_pnl
 
         if window_pnl < -0.05:
-            eff_tau = max(24, getattr(self, 'tau', 96) - 12)
+            eff_tau = max(48, getattr(self, 'tau', 96) - 12)
             self.tau = eff_tau
             if self._use_c_backend():
                 self._c_snn.set_learning_params(self.rstdp.lr * 1.1, eff_tau)
@@ -176,8 +179,20 @@ class BaseTrader:
             if self._use_c_backend():
                 self._c_snn.set_learning_params(self.rstdp.lr * 0.9, eff_tau)
             self.epsilon = max(0.05, self.epsilon * 0.8)
-            self._base_threshold = min(1.0, self._base_threshold + 0.03)  # ← become less aggressive
+            self._base_threshold = min(1.0, self._base_threshold + 0.03)
             log_fn("SYS", f"Evo: win PnL={window_pnl*100:.1f}%, tau->{eff_tau} lr down eps down th->{self._base_threshold:.2f}")
+            # Dynamic bias: tilt toward the direction that was profitable
+            if self.wins > self._last_evo_wins:
+                # Count recent winning direction
+                recent_buy_wins = sum(1 for s, p in self._recent_trades[-10:] if s == 1 and p > 0)
+                recent_sell_wins = sum(1 for s, p in self._recent_trades[-10:] if s == -1 and p > 0)
+                if recent_buy_wins > recent_sell_wins:
+                    self._bias_value = min(0.5, self._bias_value + 0.02)
+                    if self._use_c_backend(): self._c_snn.set_global_bias(self._bias_value)
+                elif recent_sell_wins > recent_buy_wins:
+                    self._bias_value = max(0.1, self._bias_value - 0.02)
+                    if self._use_c_backend(): self._c_snn.set_global_bias(self._bias_value)
+            self._last_evo_wins = self.wins
 
         self._last_evo_pnl = self.total_pnl
 
@@ -414,6 +429,9 @@ class BaseTrader:
                     self._neurogenesis_cycle()
                 side = "BUY" if self.pos == 1 else "SELL"
                 self.on_exit(side, c, levered_pnl, close_reason, ts_str)
+                self._recent_trades.append((self.pos, levered_pnl))
+                if len(self._recent_trades) > 20:
+                    self._recent_trades.pop(0)
                 self.pos = 0
                 self._has_prev_pnl = False
 
