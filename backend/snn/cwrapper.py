@@ -71,6 +71,8 @@ def _setup():
     lib.snn_set_learning_params.restype = None
     lib.snn_set_global_bias.argtypes = [ctypes.c_float]
     lib.snn_set_global_bias.restype = None
+    lib.snn_reinforce.argtypes = [ctypes.c_int]
+    lib.snn_reinforce.restype = None
 
 
 class NativeSNN:
@@ -237,6 +239,10 @@ class NativeSNN:
 
     def set_global_bias(self, bias):
         self.lib.snn_set_global_bias(ctypes.c_float(bias))
+
+    def reinforce(self, punish=False):
+        """Predictive reward: reinforce (1.01x) or punish (0.99x) neurons that fired."""
+        self.lib.snn_reinforce(ctypes.c_int(1 if punish else 0))
 
 
 def quick_backtest(data, lr=0.01, tau=96.0, sl=0.05, tp=0.12,

@@ -53,12 +53,15 @@ class BaseTrader:
         self._activity_history = []
         self._base_threshold = 0.40
         self._risk_scale = 1.0
-        self._firing_count = [0] * 36  # per-neuron firing count
-        self._firing_window = 20       # sliding window size
+        self._firing_count = [0] * 36
+        self._firing_window = 20
         self._last_evo_trade = 0
         self._last_evo_pnl = 0.0
         self._last_evo_candle_count = 0
         self._no_trade_streak = 0
+        self._last_firing_action = 0
+        self._last_firing_price = 0.0
+        self._last_firing_candle = -10
 
         if config_file and os.path.exists(config_file):
             self.load_config(config_file)
@@ -310,11 +313,34 @@ class BaseTrader:
                     self._entry_consecutive += 1
                 elif raw_action != 0:
                     self._entry_consecutive = 1  # new direction, reset
-                # raw_action==0: keep consecutive (refractory skip, don't reset)
-                self._last_entry_signal = raw_action
+                # raw_action==0: don't reset consecutive, and don't update _last_entry_signal
+                if raw_action != 0:
+                    self._last_entry_signal = raw_action
                 action = raw_action if self._entry_consecutive >= 2 else 0
         else:
             action = raw_action  # no burst delay for exit signals
+
+        # ── Predictive reward: reinforce/punish neurons from previous candle ──
+        if use_c and self._last_firing_candle == self.candle_count - 1:
+            prev_action = self._last_firing_action
+            if prev_action == 1:  # BUY signal
+                correct = c > self._last_firing_price
+            elif prev_action == -1:  # SELL signal
+                correct = c < self._last_firing_price
+            else:
+                correct = False
+            if correct:
+                self._c_snn.reinforce(punish=False)
+                log_fn = getattr(self, '_log', print)
+                log_fn("SYS", f"Predictive: reinforce (prev_Buy={prev_action} price from ${self._last_firing_price:.4f} to ${c:.4f})")
+            else:
+                self._c_snn.reinforce(punish=True)
+
+        # ── Save current firing for next candle's predictive check ──
+        if raw_action != 0:
+            self._last_firing_action = raw_action
+            self._last_firing_price = c
+            self._last_firing_candle = self.candle_count
 
         # ── Log values ──
         buy_val = max(buy_raw) if buy_raw else 0

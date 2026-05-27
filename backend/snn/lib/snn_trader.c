@@ -281,6 +281,9 @@ static void rstpd_commit_one(Neuron* n, float pnl_pct, int side) {
     for (int i = 0; i < NUCLEUS_SIZE; i++) {
         n->velocity[i] = 0.9f * n->velocity[i] + g_rstdp.lr * n->eligibility[i] * reward;
         n->nucleus[i] += n->velocity[i];
+        /* Clamp to [-10, +10] */
+        if (n->nucleus[i] > 10.0f) n->nucleus[i] = 10.0f;
+        if (n->nucleus[i] < -10.0f) n->nucleus[i] = -10.0f;
         n->eligibility[i] = 0.0f;
     }
     g_rstdp.total_pnl += net;
@@ -435,7 +438,7 @@ EXPORT void snn_backtest(
                     /* L2 weight decay */
                     for (int i = 0; i < TOTAL_N; i++) {
                         for (int j = 0; j < NUCLEUS_SIZE; j++)
-                            g_neurons[i].nucleus[j] *= 0.99999f;
+                            g_neurons[i].nucleus[j] *= 0.999f;
                     }
                 }
             } else {
@@ -605,7 +608,7 @@ EXPORT void snn_hebbian_idle(const float* spikes, float lr_hebb) {
     /* L2 weight decay to prevent divergence */
     for (int i = 0; i < TOTAL_N; i++) {
         for (int j = 0; j < NUCLEUS_SIZE; j++)
-            g_neurons[i].nucleus[j] *= 0.99999f;
+            g_neurons[i].nucleus[j] *= 0.999f;
     }
 }
 
@@ -784,5 +787,22 @@ EXPORT void snn_set_learning_params(float lr, float tau) {
 EXPORT void snn_set_global_bias(float bias) {
     for (int i = 0; i < TOTAL_N; i++) {
         g_neurons[i].bias = bias;
+    }
+}
+
+EXPORT void snn_reinforce(int punish) {
+    /* Predictive reward: reinforce or punish neurons that fired on previous candle.
+       reinforce (punish=0): multiply nucleus by 1.01
+       punish (punish=1):    multiply nucleus by 0.99
+       Clamp to [-10, +10]. */
+    float factor = punish ? 0.99f : 1.01f;
+    for (int i = 0; i < TOTAL_N; i++) {
+        if (g_neurons[i].output > 0.0f) {  /* only adjust neurons that fired */
+            for (int j = 0; j < NUCLEUS_SIZE; j++) {
+                g_neurons[i].nucleus[j] *= factor;
+                if (g_neurons[i].nucleus[j] > 10.0f) g_neurons[i].nucleus[j] = 10.0f;
+                if (g_neurons[i].nucleus[j] < -10.0f) g_neurons[i].nucleus[j] = -10.0f;
+            }
+        }
     }
 }
