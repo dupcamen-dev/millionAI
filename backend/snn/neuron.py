@@ -10,8 +10,8 @@ class TradingNeuron:
         else:
             fan = nucleus_size + nucleus_size
             scale = math.sqrt(6.0 / fan)
-            self.nucleus = np.random.uniform(-scale, scale, nucleus_size).astype(np.float32)
-        self.bias = 1.0
+            self.nucleus = np.random.uniform(-4.0, 4.0, nucleus_size).astype(np.float32)
+        self.bias = 0.3
         self.potential = 0.0
         self.threshold = 0.5
         self.output = 0.0

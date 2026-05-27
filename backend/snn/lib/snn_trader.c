@@ -305,13 +305,13 @@ EXPORT void snn_backtest(
         float xavier_scale = sqrtf(6.0f / (float)(NUCLEUS_SIZE + NUCLEUS_SIZE));
         for (int i = 0; i < TOTAL_N; i++) {
             for (int j = 0; j < NUCLEUS_SIZE; j++) {
-                g_neurons[i].nucleus[j] = ((float)rand() / (float)RAND_MAX - 0.5f) * 2.0f * xavier_scale;
+                g_neurons[i].nucleus[j] = ((float)rand() / (float)RAND_MAX - 0.5f) * 2.0f * 4.0f;
             }
         }
     }
 
     for (int i = 0; i < TOTAL_N; i++) {
-        g_neurons[i].bias = 1.0f;
+        g_neurons[i].bias = 0.3f;
         g_neurons[i].potential = 0.0f;
         g_neurons[i].threshold = 0.5f;
         g_neurons[i].refractory = 0.0f;
@@ -502,13 +502,13 @@ EXPORT void snn_init_live(const float* nucleus_data, float lr, float tau) {
         float xavier_scale = sqrtf(6.0f / (float)(NUCLEUS_SIZE + NUCLEUS_SIZE));
         for (int i = 0; i < TOTAL_N; i++) {
             for (int j = 0; j < NUCLEUS_SIZE; j++) {
-                g_neurons[i].nucleus[j] = ((float)rand() / (float)RAND_MAX - 0.5f) * 2.0f * xavier_scale;
+                g_neurons[i].nucleus[j] = ((float)rand() / (float)RAND_MAX - 0.5f) * 2.0f * 4.0f;
             }
         }
     }
 
     for (int i = 0; i < TOTAL_N; i++) {
-        g_neurons[i].bias = 1.0f;
+        g_neurons[i].bias = 0.3f;
         g_neurons[i].potential = 0.0f;
         g_neurons[i].threshold = 0.5f;
         g_neurons[i].refractory = 0.0f;
