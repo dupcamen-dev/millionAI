@@ -244,7 +244,11 @@ class RealTrader(BaseTrader):
             qty = max(qty, min_qty)
             self._log("SYS", f"Raised qty to {qty} for min notional ${min_notional}")
 
-        return qty
+        # v1: risk scaling from volatility
+        qty *= getattr(self, '_risk_scale', 1.0)
+        qty = max(qty, min_qty)
+        qty = math.floor(qty / step) * step
+        return max(qty, min_qty)
 
     def on_entry(self, side, price, ts_str):
         super().on_entry(side, price, ts_str)

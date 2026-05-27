@@ -48,6 +48,11 @@ class BaseTrader:
         self.epsilon = 0.15
         self.last_candle_time = time.time()
         self._c_snn = None  # NativeSNN instance (compiled C SNN)
+        self._last_entry_signal = 0
+        self._entry_consecutive = 0
+        self._activity_history = []
+        self._base_threshold = 0.5
+        self._risk_scale = 1.0
 
         if config_file and os.path.exists(config_file):
             self.load_config(config_file)
@@ -132,6 +137,52 @@ class BaseTrader:
             return random.choice([1, -1])
         return 0
 
+    def _compute_decision(self, buy_raw, sell_raw, th_val):
+        # ── Tonic homeostasis: track raw activity ──
+        active = sum(1 for o in buy_raw + sell_raw if o > 0)
+        self._activity_history.append(active / 32.0)
+        if len(self._activity_history) > 20:
+            self._activity_history.pop(0)
+
+        if self.candle_count % 5 == 0 and len(self._activity_history) > 0:
+            avg = sum(self._activity_history) / len(self._activity_history)
+            if avg > 0.50:
+                self._base_threshold = min(1.0, self._base_threshold + 0.005)
+            elif avg < 0.10:
+                self._base_threshold = max(0.3, self._base_threshold - 0.005)
+
+        # ── Score: top-3 weighted ──
+        buy_sorted = sorted(buy_raw, reverse=True)
+        sell_sorted = sorted(sell_raw, reverse=True)
+        buy_score = 0.7 * buy_sorted[0] + 0.3 * (sum(buy_sorted[:3]) / 3.0)
+        sell_score = 0.7 * sell_sorted[0] + 0.3 * (sum(sell_sorted[:3]) / 3.0)
+
+        # ── Cross-inhibition ──
+        if buy_score > sell_score:
+            sell_score *= 0.5
+        else:
+            buy_score *= 0.5
+
+        # ── Volatility threshold ──
+        vol_pct = getattr(self, 'volatility_pct', 20.0)
+        vol_mult = max(1.0, min(2.0, 1.0 + (vol_pct - 20.0) / 50.0))
+        self._risk_scale = max(0.4, 1.0 / vol_mult)
+        eff_th = max(th_val, self._base_threshold) * vol_mult
+
+        # ── Margin filter ──
+        margin = abs(buy_score - sell_score) / max(buy_score, sell_score, 0.01)
+        if margin < 0.15:
+            return 0
+        if max(buy_score, sell_score) < eff_th:
+            return 0
+
+        # ── Final decision ──
+        if buy_score > sell_score:
+            return 1
+        elif sell_score > buy_score:
+            return -1
+        return 0
+
     def on_candle(self, o, h, l, c, v, ts=None, order_book=None, trade_tape=None):
         self.last_close = c
         self.candle_count += 1
@@ -141,21 +192,30 @@ class BaseTrader:
 
         use_c = self._use_c_backend()
         if use_c:
-            buy_val, sell_val, th_val = self._c_snn.forward(spikes)
-            if buy_val > th_val and buy_val >= sell_val:
-                action = 1
-            elif sell_val > th_val and sell_val > buy_val:
-                action = -1
-            elif random.random() < self.epsilon:
-                action = random.choice([1, -1])
-            else:
-                action = 0
+            buy_raw, sell_raw, th_val = self._c_snn.forward_raw(spikes)
         else:
             self.forward_all(spikes)
-            action = self.compute_action()
-            buy_val = max(n.output for n in self.neurons[:BUY_N]) if self.neurons else 0
-            sell_val = max(n.output for n in self.neurons[BUY_N:]) if len(self.neurons) > BUY_N else 0
+            buy_raw = [n.output for n in self.neurons[:BUY_N]]
+            sell_raw = [n.output for n in self.neurons[BUY_N:]]
             th_val = self.neurons[0].threshold if self.neurons else 0.3
+
+        # ── v1 Decision Pipeline ─────────────────────────────
+        raw_action = self._compute_decision(buy_raw, sell_raw, th_val)
+
+        # ── Burst detector: entry needs 2+ consecutive, exit is instant ──
+        if self.pos == 0:
+            if raw_action == self._last_entry_signal and raw_action != 0:
+                self._entry_consecutive += 1
+            else:
+                self._entry_consecutive = 1 if raw_action != 0 else 0
+            self._last_entry_signal = raw_action
+            action = raw_action if self._entry_consecutive >= 2 else 0
+        else:
+            action = raw_action  # no burst delay for exit signals
+
+        # ── Log values ──
+        buy_val = max(buy_raw) if buy_raw else 0
+        sell_val = max(sell_raw) if sell_raw else 0
 
         ts_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts)) if ts else time.strftime("%Y-%m-%d %H:%M")
 

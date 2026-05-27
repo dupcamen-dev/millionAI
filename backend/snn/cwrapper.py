@@ -82,9 +82,16 @@ class NativeSNN:
             sp.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
             self._buy, self._sell, ctypes.byref(self._th),
         )
-        buy_max = float(max(self._buy))
-        sell_max = float(max(self._sell))
-        return buy_max, sell_max, self._th.value
+        return max(self._buy), max(self._sell), self._th.value
+
+    def forward_raw(self, spikes):
+        """Return raw per-neuron outputs: buy[16], sell[16], threshold."""
+        sp = np.asarray(spikes[:SENSORY], dtype=np.float32)
+        self.lib.snn_forward_live(
+            sp.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+            self._buy, self._sell, ctypes.byref(self._th),
+        )
+        return list(self._buy), list(self._sell), self._th.value
 
     def accumulate(self, spikes):
         sp = np.asarray(spikes[:SENSORY], dtype=np.float32)
