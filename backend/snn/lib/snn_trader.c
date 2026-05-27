@@ -16,8 +16,8 @@
 
 /* ==================== Architecture constants ==================== */
 #define NUCLEUS_SIZE   64
-#define BUY_N          16
-#define SELL_N         16
+#define BUY_N          18
+#define SELL_N         18
 #define TOTAL_N        (BUY_N + SELL_N)
 #define UNFOLD_SIZE    (NUCLEUS_SIZE * 4)
 #define SENSORY        14
@@ -67,6 +67,7 @@ typedef struct {
 /* ==================== Global State ==================== */
 static Neuron g_neurons[TOTAL_N];
 static RSTDPState g_rstdp;
+static float g_active_mask[TOTAL_N]; /* 1.0 = active, 0.0 = reserve */
 
 /* ==================== Archive Operations ==================== */
 
@@ -338,6 +339,7 @@ EXPORT void snn_backtest(
         memset(g_neurons[i].velocity, 0, NUCLEUS_SIZE * sizeof(float));
     }
 
+    for (int i = 0; i < TOTAL_N; i++) g_active_mask[i] = 1.0f;
     rstpd_init(&g_rstdp, lr, tau);
 
     /* State */
@@ -534,6 +536,11 @@ EXPORT void snn_init_live(const float* nucleus_data, float lr, float tau) {
         memset(g_neurons[i].eligibility, 0, NUCLEUS_SIZE * sizeof(float));
         memset(g_neurons[i].velocity, 0, NUCLEUS_SIZE * sizeof(float));
     }
+    /* Init active mask: 16 BUY + 16 SELL active, 4 reserve */
+    for (int i = 0; i < 16; i++) g_active_mask[i] = 1.0f;
+    for (int i = 16; i < 18; i++) g_active_mask[i] = 0.0f;
+    for (int i = 18; i < 34; i++) g_active_mask[i] = 1.0f;
+    for (int i = 34; i < 36; i++) g_active_mask[i] = 0.0f;
     rstpd_init(&g_rstdp, lr, tau);
 }
 
@@ -543,11 +550,11 @@ EXPORT void snn_forward_live(const float* spikes, float* buy_out, float* sell_ou
 
     for (int i = 0; i < BUY_N; i++) {
         neuron_forward(&g_neurons[i], spikes, SENSORY, SENSORY);
-        buy_out[i] = g_neurons[i].output;
+        buy_out[i] = (g_active_mask[i] > 0.5f) ? g_neurons[i].output : 0.0f;
     }
     for (int i = 0; i < SELL_N; i++) {
         neuron_forward(&g_neurons[BUY_N + i], neg_spikes, SENSORY, SENSORY);
-        sell_out[i] = g_neurons[BUY_N + i].output;
+        sell_out[i] = (g_active_mask[BUY_N + i] > 0.5f) ? g_neurons[BUY_N + i].output : 0.0f;
     }
     *threshold = g_neurons[0].threshold;
 }
@@ -557,15 +564,20 @@ EXPORT void snn_accumulate_live(const float* spikes) {
     for (int i = 0; i < SENSORY; i++) neg_spikes[i] = -spikes[i];
 
     for (int i = 0; i < BUY_N; i++) {
-        rstpd_accumulate_one(&g_neurons[i], spikes, SENSORY);
+        if (g_active_mask[i] > 0.5f)
+            rstpd_accumulate_one(&g_neurons[i], spikes, SENSORY);
     }
     for (int i = 0; i < SELL_N; i++) {
-        rstpd_accumulate_one(&g_neurons[BUY_N + i], neg_spikes, SENSORY);
+        int idx = BUY_N + i;
+        if (g_active_mask[idx] > 0.5f)
+            rstpd_accumulate_one(&g_neurons[idx], neg_spikes, SENSORY);
     }
 }
 
 EXPORT void snn_decay_all(void) {
-    for (int i = 0; i < TOTAL_N; i++) rstpd_decay_one(&g_neurons[i]);
+    for (int i = 0; i < TOTAL_N; i++)
+        if (g_active_mask[i] > 0.5f)
+            rstpd_decay_one(&g_neurons[i]);
 }
 
 EXPORT void snn_hebbian_idle(const float* spikes, float lr_hebb) {
@@ -594,13 +606,15 @@ EXPORT void snn_hebbian_idle(const float* spikes, float lr_hebb) {
 
 EXPORT void snn_micro_reward_all(float prev_pnl, float curr_pnl) {
     for (int i = 0; i < TOTAL_N; i++) {
-        rstpd_micro_reward_one(&g_neurons[i], prev_pnl, curr_pnl);
+        if (g_active_mask[i] > 0.5f)
+            rstpd_micro_reward_one(&g_neurons[i], prev_pnl, curr_pnl);
     }
 }
 
 EXPORT float snn_commit_all(float pnl_pct, int side) {
     for (int i = 0; i < TOTAL_N; i++) {
-        rstpd_commit_one(&g_neurons[i], pnl_pct, side);
+        if (g_active_mask[i] > 0.5f)
+            rstpd_commit_one(&g_neurons[i], pnl_pct, side);
     }
     /* return reward */
     float avg_net = g_rstdp.total_pnl / (float)(g_rstdp.trades > 0 ? g_rstdp.trades : 1);
@@ -627,13 +641,14 @@ EXPORT void snn_get_rstdp_state_live(float* lr, float* total_pnl, int* trades, i
  *   refr_counter(1), output(1), eligibility[NUCLEUS_SIZE], velocity[NUCLEUS_SIZE]
  * Then RSTDP state:
  *   lr(1), total_pnl(1), trades(1), wins(1), trades_total(1),
- *   running_pnl_sum(1), running_pnl_sq(1), running_count(1)  [Sharpe stats]
- * Total floats = TOTAL_N * (NUCLEUS_SIZE + 6 + NUCLEUS_SIZE + NUCLEUS_SIZE) + 8
- *              = 32 * (64 + 6 + 64 + 64) + 8 = 32 * 198 + 8 = 6344
+ *   running_pnl_sum(1), running_pnl_sq(1), running_count(1),
+ *   active_mask[36]
+ * Total floats = TOTAL_N * (NUCLEUS_SIZE + 6 + NUCLEUS_SIZE + NUCLEUS_SIZE) + 8 + 36
+ *              = 36 * (64 + 6 + 64 + 64) + 44 = 36 * 198 + 44 = 7172
  */
 
 #define STATE_PER_NEURON (NUCLEUS_SIZE + 6 + NUCLEUS_SIZE + NUCLEUS_SIZE)  /* 198 */
-#define STATE_TOTAL (TOTAL_N * STATE_PER_NEURON + 8)                        /* 6344 */
+#define STATE_TOTAL (TOTAL_N * STATE_PER_NEURON + 44)                        /* 7172 */
 
 EXPORT int snn_save_state(float* buf) {
     int pos = 0;
@@ -664,6 +679,8 @@ EXPORT int snn_save_state(float* buf) {
     buf[pos++] = g_rstdp.running_pnl_sum;
     buf[pos++] = g_rstdp.running_pnl_sq;
     buf[pos++] = (float)g_rstdp.running_count;
+    /* active mask */
+    for (int i = 0; i < TOTAL_N; i++) buf[pos++] = g_active_mask[i];
     return pos;
 }
 
@@ -704,5 +721,63 @@ EXPORT void snn_load_state(const float* buf, int load_eligibility, int load_memb
         g_rstdp.running_pnl_sum = buf[pos++];
         g_rstdp.running_pnl_sq = buf[pos++];
         g_rstdp.running_count = (int)buf[pos++];
+    }
+    /* active mask */
+    if (load_eligibility) {
+        for (int i = 0; i < TOTAL_N; i++) g_active_mask[i] = buf[pos + i];
+    }
+    pos += TOTAL_N;
+}
+
+/* ==================== EvoBrain API ==================== */
+
+EXPORT void snn_activate_neuron(int idx) {
+    if (idx >= 0 && idx < TOTAL_N) {
+        g_active_mask[idx] = 1.0f;
+        memset(g_neurons[idx].eligibility, 0, NUCLEUS_SIZE * sizeof(float));
+        memset(g_neurons[idx].velocity, 0, NUCLEUS_SIZE * sizeof(float));
+        g_neurons[idx].potential = 0.0f;
+        g_neurons[idx].threshold = 0.5f;
+        g_neurons[idx].refr_counter = 0;
+    }
+}
+
+EXPORT void snn_deactivate_neuron(int idx) {
+    if (idx >= 0 && idx < TOTAL_N) {
+        g_active_mask[idx] = 0.0f;
+    }
+}
+
+EXPORT void snn_mutate_neuron(int target, int source, float sigma) {
+    if (target < 0 || target >= TOTAL_N || source < 0 || source >= TOTAL_N) return;
+    if (target == source) return;
+    static int seeded = 0;
+    if (!seeded) { srand((unsigned int)time(NULL) ^ 42); seeded = 1; }
+    for (int j = 0; j < NUCLEUS_SIZE; j++) {
+        float r = ((float)rand() / (float)RAND_MAX - 0.5f) * 2.0f;  /* [-1, 1] */
+        float v = g_neurons[source].nucleus[j] + r * sigma * 4.0f;
+        if (v > 4.0f) v = 4.0f;
+        if (v < -4.0f) v = -4.0f;
+        g_neurons[target].nucleus[j] = v;
+    }
+    memset(g_neurons[target].eligibility, 0, NUCLEUS_SIZE * sizeof(float));
+    memset(g_neurons[target].velocity, 0, NUCLEUS_SIZE * sizeof(float));
+    g_neurons[target].potential = 0.0f;
+    g_neurons[target].threshold = 0.5f;
+}
+
+EXPORT void snn_get_active_mask(float* buf) {
+    for (int i = 0; i < TOTAL_N; i++) buf[i] = g_active_mask[i];
+}
+
+EXPORT void snn_set_learning_params(float lr, float tau) {
+    g_rstdp.lr = lr;
+    g_rstdp.lr_0 = lr;
+    g_rstdp.decay = expf(-1.0f / tau);
+}
+
+EXPORT void snn_set_global_bias(float bias) {
+    for (int i = 0; i < TOTAL_N; i++) {
+        g_neurons[i].bias = bias;
     }
 }

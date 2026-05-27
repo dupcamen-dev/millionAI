@@ -6,8 +6,8 @@ import platform
 import numpy as np
 
 _LIB = None
-BUY_N = 16
-SELL_N = 16
+BUY_N = 18
+SELL_N = 18
 TOTAL_N = BUY_N + SELL_N
 NUCLEUS_SIZE = 64
 SENSORY = 14
@@ -59,6 +59,18 @@ def _setup():
     lib.snn_save_state.restype = ctypes.c_int
     lib.snn_load_state.argtypes = [ctypes.POINTER(ctypes.c_float), ctypes.c_int, ctypes.c_int]
     lib.snn_load_state.restype = None
+    lib.snn_activate_neuron.argtypes = [ctypes.c_int]
+    lib.snn_activate_neuron.restype = None
+    lib.snn_deactivate_neuron.argtypes = [ctypes.c_int]
+    lib.snn_deactivate_neuron.restype = None
+    lib.snn_mutate_neuron.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_float]
+    lib.snn_mutate_neuron.restype = None
+    lib.snn_get_active_mask.argtypes = [ctypes.POINTER(ctypes.c_float)]
+    lib.snn_get_active_mask.restype = None
+    lib.snn_set_learning_params.argtypes = [ctypes.c_float, ctypes.c_float]
+    lib.snn_set_learning_params.restype = None
+    lib.snn_set_global_bias.argtypes = [ctypes.c_float]
+    lib.snn_set_global_bias.restype = None
 
 
 class NativeSNN:
@@ -126,7 +138,7 @@ class NativeSNN:
 
     def save_state(self):
         """Export full neuron + RSTDP state as dict (for persistence to DB)."""
-        buf = (ctypes.c_float * 6400)()
+        buf = (ctypes.c_float * 7200)()
         n = self.lib.snn_save_state(buf)
         arr = np.array(buf[:n], dtype=np.float32)
         weights_2d = []
@@ -158,12 +170,15 @@ class NativeSNN:
             "running_pnl_sq": float(arr[pos + 6]),
             "running_count": int(arr[pos + 7]),
         }
+        pos += 8
+        active_mask = [int(arr[pos + i]) for i in range(TOTAL_N)]
         return {"weights": weights_2d, "membrane": membrane,
-                "eligibility": eligibility_2d, "velocity": velocity_2d, "rstpd": rstpd}
+                "eligibility": eligibility_2d, "velocity": velocity_2d,
+                "rstpd": rstpd, "active_mask": active_mask}
 
     def load_state(self, saved, load_eligibility=True, load_membrane=True):
         """Restore full neuron + RSTDP state from dict (saved via save_state)."""
-        buf = (ctypes.c_float * 6400)()
+        buf = (ctypes.c_float * 7200)()
         pos = 0
         for i in range(TOTAL_N):
             w = saved["weights"][i][:NUCLEUS_SIZE]
@@ -195,8 +210,33 @@ class NativeSNN:
         buf[pos] = rstpd.get("running_pnl_sum", 0.0); pos += 1
         buf[pos] = rstpd.get("running_pnl_sq", 0.0); pos += 1
         buf[pos] = rstpd.get("running_count", 0); pos += 1
+        # active mask
+        am = saved.get("active_mask", [1] * TOTAL_N)
+        for v in am[:TOTAL_N]: buf[pos] = float(v); pos += 1
+        for _ in range(TOTAL_N - len(am)): buf[pos] = 1.0; pos += 1
         self.lib.snn_load_state(buf, ctypes.c_int(1 if load_eligibility else 0),
                                 ctypes.c_int(1 if load_membrane else 0))
+
+    # ── EvoBrain API ──
+    def activate_neuron(self, idx):
+        self.lib.snn_activate_neuron(ctypes.c_int(idx))
+
+    def deactivate_neuron(self, idx):
+        self.lib.snn_deactivate_neuron(ctypes.c_int(idx))
+
+    def mutate_neuron(self, target, source, sigma=0.1):
+        self.lib.snn_mutate_neuron(ctypes.c_int(target), ctypes.c_int(source), ctypes.c_float(sigma))
+
+    def get_active_mask(self):
+        buf = (ctypes.c_float * TOTAL_N)()
+        self.lib.snn_get_active_mask(buf)
+        return [int(buf[i]) for i in range(TOTAL_N)]
+
+    def set_learning_params(self, lr, tau):
+        self.lib.snn_set_learning_params(ctypes.c_float(lr), ctypes.c_float(tau))
+
+    def set_global_bias(self, bias):
+        self.lib.snn_set_global_bias(ctypes.c_float(bias))
 
 
 def quick_backtest(data, lr=0.01, tau=96.0, sl=0.05, tp=0.12,
