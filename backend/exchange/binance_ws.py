@@ -6,7 +6,7 @@ import websocket
 
 
 class BinanceWSListener:
-    """Multi-stream WebSocket listener: kline (primary) + depth + trades."""
+    """Multi-stream WebSocket: kline (primary) + depth + trades.  Direct method callbacks."""
 
     def __init__(self, on_candle, on_error=None, reconnect_delay=5, log_fn=None):
         self.on_candle_cb = on_candle
@@ -17,125 +17,184 @@ class BinanceWSListener:
         self._lock = threading.Lock()
         self._log = log_fn
 
+        # Trade accumulator per 5-min window
         self._trade_buy_vol = 0.0
         self._trade_sell_vol = 0.0
         self._trade_count = 0
         self._trades_sizes = []
 
+        # Order book cache
+        self._order_book = None
         self._depth_received = False
         self._first_trade_logged = False
-        self._order_book = None
-        self._msg_count = 0  # debug: count received messages
 
-        self._kline_ws = None
-        self._depth_ws = None
-        self._trade_ws = None
+        # Debug: per-stream message counters
+        self._kline_msg_n = 0
+        self._depth_msg_n = 0
+        self._trade_msg_n = 0
+
         self._running = True
 
-    def _slog(self, msg):
-        self._log and self._log("SYS", msg)
+    def _slog(self, txt):
+        if self._log:
+            self._log("SYS", txt)
 
-    # ── Generic message handler (single arg) ────────────────
-    def _on_msg(self, raw):
-        """Handle any WebSocket message — dispatch by type."""
-        self._msg_count += 1
+    # ════════════════ Kline callback methods (DIRECT, not lambda) ════════════════
+    def _on_kline_msg(self, ws, msg):
+        self._kline_msg_n += 1
         try:
-            data = json.loads(raw)
-        except Exception:
-            return
-
-        e_type = data.get("e", "")
-        if e_type == "kline":
-            self._handle_kline(data)
-        elif e_type == "depthUpdate":
-            self._handle_depth(data)
-        elif e_type == "aggTrade":
-            self._handle_trade(data)
-
-        # Debug: log first 3 raw messages
-        if self._msg_count <= 3:
-            preview = str(data)[:300]
-            self._slog(f"WS msg#{self._msg_count}: {preview}")
-
-    def _on_err(self, error):
-        if isinstance(error, Exception):
-            err_str = str(error)[:200]
-        else:
-            err_str = str(error)[:200]
-        sys.stderr.write(f"WS error: {err_str}\n")
-        self._slog(f"WS ERROR: {err_str}")
-
-    def _on_close(self, *args):
-        self._slog("WS connection closed")
-
-    def _on_open(self):
-        self._slog(f"WS connected: {self._symbol}")
-
-    # ── Kline handler ──────────────────────────────
-    def _handle_kline(self, data):
-        k = data.get("k", {})
-        if not k.get("x", False):
-            now = time.time()
-            if now - self._last_open_log_ts > 300:
-                self._last_open_log_ts = now
-                self._slog(f"Kline alive: ${k.get('c','?')} (waiting)")
-            return
-        ct = k["T"]
-        with self._lock:
-            if ct <= self._last_close_time:
+            data = json.loads(msg)
+            if self._kline_msg_n <= 3:
+                preview = str(data)[:250]
+                self._slog(f"Kline#{self._kline_msg_n}: {preview}")
+            k = data.get("k", {})
+            if not k.get("x", False):
+                now = time.time()
+                if now - self._last_open_log_ts > 300:
+                    self._last_open_log_ts = now
+                    self._slog(f"Kline alive: ${k.get('c','?')}")
                 return
-            self._last_close_time = ct
-            o = float(k["o"]); h = float(k["h"]); l = float(k["l"])
-            c = float(k["c"]); v = float(k["v"])
-            order_book = self._build_order_book()
-            trade_tape = self._build_trade_tape()
-            self._trade_buy_vol = 0.0
-            self._trade_sell_vol = 0.0
-            self._trade_count = 0
-            self._trades_sizes = []
+            ct = k["T"]
+            with self._lock:
+                if ct <= self._last_close_time:
+                    return
+                self._last_close_time = ct
+                o = float(k["o"]); h = float(k["h"]); l = float(k["l"])
+                c = float(k["c"]); v = float(k["v"])
+                ob = self._order_book[:] if self._order_book else None
+                tt = self._build_trade_tape()
+                self._trade_buy_vol = 0.0
+                self._trade_sell_vol = 0.0
+                self._trade_count = 0
+                self._trades_sizes = []
 
-        self.on_candle_cb(o, h, l, c, v, k["t"] / 1000,
-                          order_book=order_book, trade_tape=trade_tape)
+            self.on_candle_cb(o, h, l, c, v, k["t"] / 1000,
+                              order_book=ob, trade_tape=tt)
+        except Exception as e:
+            sys.stderr.write(f"[kline] parse: {e}\n")
 
-    # ── Depth handler ──────────────────────────────
-    def _handle_depth(self, data):
-        bids = data.get("bids", [])
-        asks = data.get("asks", [])
-        if not bids or not asks:
-            return
-        if not self._depth_received:
-            self._depth_received = True
-            self._slog(f"Depth: bid={bids[0][0]} ask={asks[0][0]}")
-        bid_qty = sum(float(b[1]) for b in bids[:5])
-        ask_qty = sum(float(a[1]) for a in asks[:5])
-        best_bid = float(bids[0][0]) if bids else 0
-        best_ask = float(asks[0][0]) if asks else 0
-        max_bid_qty = max((float(b[1]) for b in bids[:5]), default=0)
-        max_ask_qty = max((float(a[1]) for a in asks[:5]), default=0)
-        with self._lock:
-            self._order_book = [bid_qty, ask_qty, best_bid, best_ask, max_bid_qty, max_ask_qty]
+    def _on_kline_err(self, ws, error):
+        sys.stderr.write(f"[kline] WS error: {error}\n")
 
-    # ── Trade handler ──────────────────────────────
-    def _handle_trade(self, data):
-        if not self._first_trade_logged:
-            self._first_trade_logged = True
-            self._slog("Trade stream active")
-        price = float(data.get("p", 0))
-        qty = float(data.get("q", 0))
-        is_buyer_maker = data.get("m", False)
-        vol = price * qty
-        with self._lock:
-            if is_buyer_maker:
-                self._trade_sell_vol += vol
-            else:
-                self._trade_buy_vol += vol
-            self._trade_count += 1
-            self._trades_sizes.append(qty)
+    def _on_kline_open(self, ws):
+        self._slog(f"Kline WS connected: {self._symbol}")
+
+    def _on_kline_close(self, ws, *args):
+        sys.stdout.write(f"[kline] closed, reconnecting in {self.reconnect_delay}s...\n")
+        time.sleep(self.reconnect_delay)
+        if self._running and self._kline_ws:
+            self._kline_ws.run_forever()
+
+    def _run_kline(self):
+        url = f"wss://fstream.binance.com/ws/{self._symbol.lower()}@kline_{self._interval}"
+        self._kline_ws = websocket.WebSocketApp(
+            url,
+            on_open=self._on_kline_open,
+            on_message=self._on_kline_msg,
+            on_error=self._on_kline_err,
+            on_close=self._on_kline_close,
+        )
+        self._slog(f"Kline WS starting: {self._symbol}@{self._interval}")
+        self._kline_ws.run_forever()
+
+    # ════════════════ Depth callback methods ════════════════
+    def _on_depth_msg(self, ws, msg):
+        self._depth_msg_n += 1
+        try:
+            data = json.loads(msg)
+            if self._depth_msg_n == 1:
+                self._slog(f"Depth#{self._depth_msg_n}: received")
+            bids = data.get("bids", [])
+            asks = data.get("asks", [])
+            if not bids or not asks:
+                return
+            if not self._depth_received:
+                self._depth_received = True
+                self._slog(f"Depth data: bid={bids[0][0]} ask={asks[0][0]}")
+            bid_qty = sum(float(b[1]) for b in bids[:5])
+            ask_qty = sum(float(a[1]) for a in asks[:5])
+            best_bid = float(bids[0][0]) if bids else 0
+            best_ask = float(asks[0][0]) if asks else 0
+            max_bid_qty = max((float(b[1]) for b in bids[:5]), default=0)
+            max_ask_qty = max((float(a[1]) for a in asks[:5]), default=0)
+            with self._lock:
+                self._order_book = [bid_qty, ask_qty, best_bid, best_ask, max_bid_qty, max_ask_qty]
+        except Exception:
+            pass
+
+    def _on_depth_err(self, ws, error):
+        sys.stderr.write(f"[depth] WS error: {error}\n")
+
+    def _on_depth_open(self, ws):
+        self._slog(f"Depth WS connected: {self._symbol}")
+
+    def _on_depth_close(self, ws, *args):
+        sys.stdout.write(f"[depth] closed, reconnecting...\n")
+        time.sleep(self.reconnect_delay)
+        if self._running and self._depth_ws:
+            self._depth_ws.run_forever()
+
+    def _run_depth(self):
+        url = f"wss://fstream.binance.com/ws/{self._symbol.lower()}@depth5@500ms"
+        self._depth_ws = websocket.WebSocketApp(
+            url,
+            on_open=self._on_depth_open,
+            on_message=self._on_depth_msg,
+            on_error=self._on_depth_err,
+            on_close=self._on_depth_close,
+        )
+        self._slog(f"Depth WS starting: {self._symbol}@depth5")
+        self._depth_ws.run_forever()
+
+    # ════════════════ Trade callback methods ════════════════
+    def _on_trade_msg(self, ws, msg):
+        self._trade_msg_n += 1
+        try:
+            data = json.loads(msg)
+            if self._trade_msg_n == 1:
+                self._slog(f"Trade#{self._trade_msg_n}: received")
+            if not self._first_trade_logged:
+                self._first_trade_logged = True
+                self._slog("Trade stream active")
+            price = float(data.get("p", 0))
+            qty = float(data.get("q", 0))
+            is_buyer_maker = data.get("m", False)
+            vol = price * qty
+            with self._lock:
+                if is_buyer_maker:
+                    self._trade_sell_vol += vol
+                else:
+                    self._trade_buy_vol += vol
+                self._trade_count += 1
+                self._trades_sizes.append(qty)
+        except Exception:
+            pass
+
+    def _on_trade_err(self, ws, error):
+        sys.stderr.write(f"[trade] WS error: {error}\n")
+
+    def _on_trade_open(self, ws):
+        self._slog(f"Trade WS connected: {self._symbol}")
+
+    def _on_trade_close(self, ws, *args):
+        sys.stdout.write(f"[trade] closed, reconnecting...\n")
+        time.sleep(self.reconnect_delay)
+        if self._running and self._trade_ws:
+            self._trade_ws.run_forever()
+
+    def _run_trade(self):
+        url = f"wss://fstream.binance.com/ws/{self._symbol.lower()}@aggTrade"
+        self._trade_ws = websocket.WebSocketApp(
+            url,
+            on_open=self._on_trade_open,
+            on_message=self._on_trade_msg,
+            on_error=self._on_trade_err,
+            on_close=self._on_trade_close,
+        )
+        self._slog(f"Trade WS starting: {self._symbol}@aggTrade")
+        self._trade_ws.run_forever()
 
     # ── Helpers ─────────────────────────────────────
-    def _build_order_book(self):
-        return self._order_book[:] if self._order_book else None
-
     def _build_trade_tape(self):
         if self._trade_count == 0:
             return None
@@ -149,43 +208,25 @@ class BinanceWSListener:
         return [self._trade_buy_vol, self._trade_sell_vol,
                 float(self._trade_count), large_ratio]
 
-    # ── Connection (single WebSocket, combined stream) ──
-    def _run_ws(self):
-        # One connection, all 3 streams
-        sym = self._symbol.lower()
-        self._url = (
-            f"wss://fstream.binance.com/stream?"
-            f"streams={sym}@kline_{self._interval}/{sym}@depth5@500ms/{sym}@aggTrade"
-        )
-        self._slog(f"WS connecting: {self._url[:80]}...")
-        self._ws = websocket.WebSocketApp(
-            self._url,
-            on_open=lambda *_: self._on_open(),
-            on_message=lambda _, msg: self._on_msg(msg),
-            on_error=lambda _, err: self._on_err(err),
-            on_close=lambda _, *args: self._on_close(),
-        )
-        self._ws.run_forever()
-
+    # ── Public API ──────────────────────────────────
     def connect(self, symbol: str, interval: str = "5m"):
         self._symbol = symbol.upper()
         self._interval = interval
-        self._ws = None
-        self._url = f"wss://fstream.binance.com/ws/{symbol.lower()}@kline_{interval}"
-        self._slog(f"WS connecting: {self._url[:80]}...")
-        self._ws = websocket.WebSocketApp(
-            self._url,
-            on_open=lambda *_: self._on_open(),
-            on_message=lambda _, msg: self._on_msg(msg),
-            on_error=lambda _, err: self._on_err(err),
-            on_close=lambda _, *args: self._on_close(),
-        )
-        self._ws.run_forever()
+
+        t_k = threading.Thread(target=self._run_kline, daemon=True)
+        t_k.start()
+        t_d = threading.Thread(target=self._run_depth, daemon=True)
+        t_d.start()
+        t_t = threading.Thread(target=self._run_trade, daemon=True)
+        t_t.start()
+
+        t_k.join()  # block until stopped
 
     def stop(self):
         self._running = False
-        if self._ws:
-            try:
-                self._ws.close()
-            except Exception:
-                pass
+        for ws in [self._kline_ws, self._depth_ws, self._trade_ws]:
+            if ws:
+                try:
+                    ws.close()
+                except Exception:
+                    pass
