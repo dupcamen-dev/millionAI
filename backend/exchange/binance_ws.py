@@ -32,6 +32,7 @@ class BinanceWSListener:
         self._kline_msg_n = 0
         self._depth_msg_n = 0
         self._trade_msg_n = 0
+        self._kline_start_ts = 0
 
         self._running = True
 
@@ -77,6 +78,8 @@ class BinanceWSListener:
         sys.stderr.write(f"[kline] WS error: {error}\n")
 
     def _on_kline_open(self, ws):
+        self._kline_msg_n = 0
+        self._kline_start_ts = time.time()
         self._slog(f"Kline WS connected: {self._symbol}")
 
     def _on_kline_close(self, ws, *args):
@@ -219,6 +222,16 @@ class BinanceWSListener:
         t_d.start()
         t_t = threading.Thread(target=self._run_trade, daemon=True)
         t_t.start()
+
+        # Monitor: log if no kline messages after 60s
+        def _kline_watchdog():
+            time.sleep(60)
+            if self._running and self._kline_msg_n == 0:
+                elapsed = time.time() - self._kline_start_ts
+                self._slog(f"Kline WARNING: 0 msgs in {elapsed:.0f}s, may need reconnect")
+                if self._kline_ws:
+                    self._kline_ws.close()
+        threading.Thread(target=_kline_watchdog, daemon=True).start()
 
         t_k.join()  # block until stopped
 
