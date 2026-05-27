@@ -281,7 +281,7 @@ class BaseTrader:
         vol_pct = getattr(self, 'volatility_pct', 20.0)
         vol_mult = max(1.0, min(2.0, 1.0 + (vol_pct - 20.0) / 50.0))
         self._risk_scale = max(0.4, 1.0 / vol_mult)
-        eff_th = self._base_threshold * vol_mult * 1.5
+        eff_th = self._base_threshold * vol_mult * 1.2
 
 # ── Margin filter (adaptive: looser during exploration) ──
         margin_thresh = 0.03 if self.epsilon > 0.15 else 0.25
