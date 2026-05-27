@@ -294,7 +294,7 @@ class BaseTrader:
             return 0
         if max(buy_score, sell_score) < eff_th:
             return 0
-        if max(buy_score, sell_score) < 0.6:  # filter weak signals
+        if max(buy_score, sell_score) < 0.45:  # filter weak signals
             return 0
 
         # ── Final decision ──
