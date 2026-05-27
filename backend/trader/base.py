@@ -308,8 +308,9 @@ class BaseTrader:
             else:
                 if raw_action == self._last_entry_signal and raw_action != 0:
                     self._entry_consecutive += 1
-                else:
-                    self._entry_consecutive = 1 if raw_action != 0 else 0
+                elif raw_action != 0:
+                    self._entry_consecutive = 1  # new direction, reset
+                # raw_action==0: keep consecutive (refractory skip, don't reset)
                 self._last_entry_signal = raw_action
                 action = raw_action if self._entry_consecutive >= 2 else 0
         else:
