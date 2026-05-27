@@ -223,6 +223,8 @@ class BaseTrader:
 
         for side, start, el_start in [("BUY", 16, 0), ("SELL", 34, 18)]:
             active_in_side = [i for i in range(el_start, el_start + 18) if mask[i]]
+            if not active_in_side:
+                continue  # no active neurons in this side
             elite = active_in_side[:3] if len(active_in_side) >= 3 else active_in_side
             for ri in range(start, start + 2):
                 if mask[ri]:
