@@ -174,7 +174,7 @@ static void encode_features(float o, float h, float l, float c, float v,
 
 /* ==================== Neuron Forward ==================== */
 
-static int neuron_forward(Neuron* n, const float* input_vec, int input_size, int n_active) {
+static int neuron_forward(Neuron* n, const float* input_vec, int input_size, int n_active, int is_buy) {
     if (n->refr_counter > 0) {
         n->refr_counter--;
         n->output = 0.0f;
@@ -186,8 +186,7 @@ static int neuron_forward(Neuron* n, const float* input_vec, int input_size, int
     float unfolded2[UNFOLD_SIZE];
     float state[NUCLEUS_SIZE];
 
-    /* Level 1 (or 3): nucleus[64] -> unfolded[256] -> compress -> features[64] */
-archive_unfold(n->nucleus, NUCLEUS_SIZE, unfolded1, UNFOLD_SIZE, 1);
+    archive_unfold(n->nucleus, NUCLEUS_SIZE, unfolded1, UNFOLD_SIZE, 1);
     archive_compress(unfolded1, UNFOLD_SIZE, compressed1, NUCLEUS_SIZE);
 
     archive_unfold(compressed1, NUCLEUS_SIZE, unfolded2, UNFOLD_SIZE, 2);
@@ -200,6 +199,17 @@ archive_unfold(n->nucleus, NUCLEUS_SIZE, unfolded1, UNFOLD_SIZE, 1);
     }
     int divisor = (n_active > 0) ? n_active : input_size;
     delta = delta / (float)divisor + n->bias;
+
+    /* Candle-aware boost: BUY fires on bullish (spikes[0]), SELL on bearish (spikes[1]) */
+    float candle_boost;
+    if (is_buy) {
+        candle_boost = input_vec[0] * 0.2f;
+    } else {
+        /* SELL gets negated spikes, so neg_spikes[1] < 0 means original spikes[1] = 1 (bearish) */
+        candle_boost = (-input_vec[1]) * 0.2f;
+    }
+    delta += candle_boost;
+
     n->potential += delta;
 
     if (n->potential >= n->threshold) {
@@ -339,7 +349,7 @@ EXPORT void snn_backtest(
     }
 
     for (int i = 0; i < TOTAL_N; i++) {
-        g_neurons[i].bias = (i < BUY_N) ? 0.3f : 0.0f;  /* BUY=0.3, SELL=0.0 */
+        g_neurons[i].bias = 0.3f;  /* symmetric, candle boost differentiates */
         g_neurons[i].potential = 0.0f;
         g_neurons[i].threshold = 0.5f;
         g_neurons[i].refractory = 0.0f;
@@ -390,11 +400,11 @@ EXPORT void snn_backtest(
             for (int i = 0; i < SENSORY; i++) neg_spikes[i] = -spikes[i];
 
             for (int i = 0; i < BUY_N; i++) {
-                neuron_forward(&g_neurons[i], spikes, SENSORY, 8);
+                neuron_forward(&g_neurons[i], spikes, SENSORY, 8, 1);
                 buy_out[i] = g_neurons[i].output;
             }
             for (int i = 0; i < SELL_N; i++) {
-                neuron_forward(&g_neurons[BUY_N + i], neg_spikes, SENSORY, 8);
+                neuron_forward(&g_neurons[BUY_N + i], neg_spikes, SENSORY, 8, 0);
                 sell_out[i] = g_neurons[BUY_N + i].output;
             }
 
@@ -537,7 +547,7 @@ EXPORT void snn_init_live(const float* nucleus_data, float lr, float tau) {
     }
 
     for (int i = 0; i < TOTAL_N; i++) {
-        g_neurons[i].bias = (i < BUY_N) ? 0.3f : 0.0f;  /* BUY=0.3, SELL=0.0 */
+        g_neurons[i].bias = 0.3f;  /* symmetric, candle boost differentiates */
         g_neurons[i].potential = 0.0f;
         g_neurons[i].threshold = 0.5f;
         g_neurons[i].refractory = 0.0f;
@@ -559,11 +569,11 @@ EXPORT void snn_forward_live(const float* spikes, float* buy_out, float* sell_ou
     for (int i = 0; i < SENSORY; i++) neg_spikes[i] = -spikes[i];
 
     for (int i = 0; i < BUY_N; i++) {
-        neuron_forward(&g_neurons[i], spikes, SENSORY, SENSORY);
+        neuron_forward(&g_neurons[i], spikes, SENSORY, SENSORY, 1);
         buy_out[i] = (g_active_mask[i] > 0.5f) ? g_neurons[i].output : 0.0f;
     }
     for (int i = 0; i < SELL_N; i++) {
-        neuron_forward(&g_neurons[BUY_N + i], neg_spikes, SENSORY, SENSORY);
+        neuron_forward(&g_neurons[BUY_N + i], neg_spikes, SENSORY, SENSORY, 0);
         sell_out[i] = (g_active_mask[BUY_N + i] > 0.5f) ? g_neurons[BUY_N + i].output : 0.0f;
     }
     *threshold = g_neurons[0].threshold;
